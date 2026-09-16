@@ -26,7 +26,8 @@ defmodule Badge.Pages do
     Badge.Page.Agent,
     Badge.Page.Cluster,
     Badge.Page.ConnectFour,
-    Badge.Page.Raycaster
+    Badge.Page.Raycaster,
+    Badge.Page.Console
   ]
 
   @per_screen length(@keys)

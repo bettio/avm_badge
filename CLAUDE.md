@@ -166,6 +166,24 @@ Setup, flashing and the ESP-IDF workflow are in `README.md`.
   `sim/test/badge/sim/share_nvs_test.exs` starts `Badge.Sim.Nvs` and covers
   the writes
 
+## Console page
+
+- `Badge.Page.Console` (square, on the third home screen) is a prompt for
+  `Badge.Elixir` (`new/0`, `feed/2`, `pending?/1`, `start/1`, `eval/2`,
+  `stop/1`) and a worker process that answers `Badge.UI` with
+  `{:console, worker, {:ok | :error, text}}`. Nothing evaluates in
+  `Badge.UI`; a worker that has not answered after ~5 s is killed, and its
+  bindings with it
+- `Badge.Elixir` is **not the compiler**: `Badge.Elixir.Lexer`, `Parser`
+  and `Eval` read a subset by hand, since `elixir_parser` and friends
+  cannot fit on the badge. It covers literals, lists with `|`, tuples,
+  maps and `%{m | k: v}`, keyword lists, `Mod.fun(args)`, `:mod.fun`,
+  `map.key`, local Kernel calls, `f.(x)`, `&Mod.fun/n` and `&(&1 + 1)`,
+  operators, `|>`, `=` with destructuring and `^x`, `fn` with clauses,
+  `case` and `if`. Not covered: guards, `cond`, `with`, ranges, string
+  interpolation, `raise` without parens, `def`. Output is `Kernel.inspect/1`,
+  which exavmlib ships
+
 ## Chat transport
 
 - The chat rides a websocket from the `atomvm_websocket_client` ESP-IDF

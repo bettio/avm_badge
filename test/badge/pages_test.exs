@@ -83,6 +83,16 @@ defmodule Badge.PagesTest do
       assert Pages.for_key(:diamond, 1) == Badge.Page.Raycaster
     end
 
+    test "the console starts a third screen" do
+      assert Pages.screens() == 3
+
+      assert for({_key, module} <- Pages.screen(2), do: module) == [
+               Badge.Page.Console | List.duplicate(nil, 5)
+             ]
+
+      assert Pages.for_key(:square, 2) == Badge.Page.Console
+    end
+
     test "the text page is kept but unreachable, an example rather than a page" do
       Code.ensure_loaded!(Badge.Page.Text)
 

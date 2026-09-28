@@ -2,7 +2,8 @@ defmodule Mix.Tasks.Badge.Base do
   @shortdoc "Downloads and flashes the AtomVM base image this firmware expects"
 
   @moduledoc """
-  Fetches the release named in `BASE_IMAGE` and writes it to the board.
+  Fetches the release named in `BASE_IMAGE`, with `curl` when it is installed
+  and `gh` otherwise, and writes it to the board.
 
       mix badge.base              # bootloader, partition table, VM at 0x10000, boot.avm at 0x1F0000
       mix badge.base --vm-only    # just the VM and boot.avm
@@ -55,10 +56,26 @@ defmodule Mix.Tasks.Badge.Base do
       File.rm_rf!(tmp)
       File.mkdir_p!(tmp)
       Mix.shell().info("downloading base image #{tag}")
-      cmd!("gh", ["release", "download", tag, "--repo", @repo, "-D", tmp])
+      download(tag, tmp, parts)
       # Only becomes the real cache dir once the download has fully landed.
       File.rm_rf!(dir)
       File.rename!(tmp, dir)
+    end
+  end
+
+  defp download(tag, tmp, parts) do
+    cond do
+      System.find_executable("curl") ->
+        for file <- [@sums | Enum.map(parts, &elem(&1, 0))] do
+          url = "https://github.com/#{@repo}/releases/download/#{tag}/#{file}"
+          cmd!("curl", ["-sSfL", "-m", "300", "-o", Path.join(tmp, file), url])
+        end
+
+      System.find_executable("gh") ->
+        cmd!("gh", ["release", "download", tag, "--repo", @repo, "-D", tmp])
+
+      true ->
+        Mix.raise("no curl or gh on PATH")
     end
   end
 

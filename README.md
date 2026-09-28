@@ -15,19 +15,16 @@ microcontrollers, and is written in Elixir.
   elixir`) are both good choices
 - **[`esptool`](https://docs.espressif.com/projects/esptool/)** — writes the
   base image, the assets partition and NVS
-- **[`gh`](https://cli.github.com/)**, authenticated — `mix badge.base`
-  downloads the VM release with it
+- **`curl`** — `mix badge.base` downloads the VM release with it, falling
+  back to an authenticated [`gh`](https://cli.github.com/)
 
 On macOS:
 
-    brew install esptool gh
-    gh auth login
+    brew install esptool
 
 On Debian or Ubuntu:
 
     pipx install esptool      # or: pip install --user esptool
-    # gh: https://github.com/cli/cli/blob/trunk/docs/install_linux.md
-    gh auth login
 
 `esptool` also ships under its older name `esptool.py`; every tool here takes
 either, falling back to `python3 -m esptool`. ESP-IDF is **not** needed to

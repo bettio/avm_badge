@@ -33,9 +33,10 @@ Setup, flashing and the ESP-IDF workflow are in `README.md`.
 
 - **Opening the serial port resets the badge.** The S3's USB-serial-JTAG
   bridge resets the chip when the host asserts DTR/RTS, and clearing them
-  first does not avoid it. A reader cannot watch a running badge; it has to
-  hold the port open from boot, so chain flash and read (see `README.md`)
-- Never run unbounded `cat`/`screen` on the port — it blocks the next flash
+  first does not avoid it. A reader cannot watch a running badge, so
+  `mix atomvm.esp32.monitor` resets it and shows the boot (see `README.md`)
+- Never run unbounded `cat`/`screen` on the port, and give the monitor a
+  `--timeout` — an open port blocks the next flash
 - `Badge.Log` is the group leader of everything the badge spawns: each
   `io:format` line is echoed, kept for the Settings Log tab, and forwarded to
   the hub while the agent is up. ESP-IDF's own `I (…)` lines are not seen

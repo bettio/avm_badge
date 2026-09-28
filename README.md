@@ -46,12 +46,10 @@ The serial port is auto-detected, so do not pass `--port`. It appears as
 `/dev/cu.usbmodem*` on macOS and `/dev/ttyACM*` on Linux, and the path changes
 between sessions because the board re-enumerates.
 
-The board resets itself after each write, so chain the read onto the flash to
-watch it boot (`stty -F` on Linux):
+To watch it boot, open the console; the task resets the board and follows it
+through the reset:
 
-    ( mix atomvm.esp32.flash >/dev/null 2>&1; \
-      stty -f /dev/cu.usbmodem* 115200 raw -echo; \
-      timeout 25 cat /dev/cu.usbmodem* )
+    mix atomvm.esp32.monitor --timeout 25
 
 You should see the AtomVM banner, then `Badge: starting`, then the home grid
 on the panel. The six shape keys open the pages; the arrows page the grid.

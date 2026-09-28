@@ -54,6 +54,8 @@ defmodule Badge.MixProject do
        github: "atomvm/ExAtomVM",
        ref: "7802373f107d0b83e36206bb06bb1ed1bb43ac90",
        runtime: false},
+      # ExAtomVM runs esptool inside this embedded Python.
+      {:pythonx, "~> 0.4.0", runtime: false},
       # The Erlang side of the port driver built into the VM. A rebar3
       # project, so mix is told which manager to use.
       {:atomvm_websocket_client,

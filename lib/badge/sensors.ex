@@ -88,6 +88,9 @@ defmodule Badge.Sensors do
     {:reply, read_temp(state.i2c), state}
   end
 
+  @impl true
+  def handle_cast(request, state), do: {:stop, {:bad_cast, request}, state}
+
   defp read_accel(%{i2c: i2c, accel: previous}) do
     case I2C.read_bytes(i2c, @sc7a20_addr, @sc7a20_out_x_l ||| @sc7a20_auto_increment, 6) do
       {:ok, bytes} -> Accel.average(previous, Accel.decode(bytes))

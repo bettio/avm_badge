@@ -77,12 +77,9 @@ Setup, flashing and the ESP-IDF workflow are in `README.md`.
 - **FreeRTOS tick is 10 ms** — the floor for any sleep or timer
 - **SPI `peripheral:` must be a string** (`"spi2"`), not an atom
 - Use plain maps, not structs
-- `atomvm.check` has known false positives: `json:encode/1`, `json:decode/1`,
-  `erlang:binary_part/3`, `lists:keysort/2`, `lists:flatmap/2` all exist in
-  the fork; `File`, `Mix`, `String`, `System` come from Mix tasks that are
-  packed but never run; `GenServer`, `Supervisor`, `network`, `uart` are
-  flagged because the checker cannot see AtomVM's own libraries. Compare the
-  count against `main` rather than reading the list
+- `atomvm.check` is clean, so any entry it lists is real. `use GenServer`
+  injects `handle_call/3` and `handle_cast/2` defaults that call
+  `erlang:phash2/2`, which the check flags, so every GenServer defines both
 
 ## Performance on the badge
 

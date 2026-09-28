@@ -140,6 +140,9 @@ defmodule Badge.UI do
   end
 
   @impl true
+  def handle_call(request, _from, state), do: {:stop, {:bad_call, request}, state}
+
+  @impl true
   def handle_cast({:goto, page}, state) do
     {:noreply, goto(%{state | idle: 0}, page)}
   end

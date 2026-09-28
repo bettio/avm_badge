@@ -59,6 +59,9 @@ defmodule Badge.Ir.Link do
   end
 
   @impl true
+  def handle_call(request, _from, state), do: {:stop, {:bad_call, request}, state}
+
+  @impl true
   def handle_cast({:transmit, payload}, state) do
     write(state.port, Frame.encode(state.id, payload))
 

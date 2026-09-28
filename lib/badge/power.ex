@@ -99,6 +99,9 @@ defmodule Badge.Power do
   end
 
   @impl true
+  def handle_cast(request, state), do: {:stop, {:bad_cast, request}, state}
+
+  @impl true
   def handle_info(:tick, state) do
     battery_mv = sample_mv(state.unit, state.battery_chan)
     vbus_mv = sample_mv(state.unit, state.vbus_chan)

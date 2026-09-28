@@ -13,26 +13,23 @@ microcontrollers, and is written in Elixir.
   [mise](https://mise.jdx.dev/lang/elixir.html) (`mise use erlang elixir`) or
   [asdf](https://asdf-vm.com/) (`asdf plugin add erlang && asdf plugin add
   elixir`) are both good choices
-- **[`esptool`](https://docs.espressif.com/projects/esptool/)** — writes the
-  base image, the assets partition and NVS
 - **[`gh`](https://cli.github.com/)**, authenticated — `mix badge.base`
   downloads the VM release with it
 
 On macOS:
 
-    brew install esptool gh
+    brew install gh
     gh auth login
 
 On Debian or Ubuntu:
 
-    pipx install esptool      # or: pip install --user esptool
     # gh: https://github.com/cli/cli/blob/trunk/docs/install_linux.md
     gh auth login
 
-`esptool` also ships under its older name `esptool.py`; every tool here takes
-either, falling back to `python3 -m esptool`. ESP-IDF is **not** needed to
-build or flash the firmware — see [Advanced](#advanced) for the two things
-that do want it.
+esptool is **not** needed: the flash tasks run it inside an embedded Python
+through [Pythonx](https://hex.pm/packages/pythonx), which downloads Python and
+esptool on first use. ESP-IDF is **not** needed to build or flash the firmware
+either — see [Advanced](#advanced) for the two things that do want it.
 
 ## Getting started
 
@@ -149,6 +146,9 @@ a VM with no matching `boot.avm` aborts at startup with `Invalid startup
 avmpack` and reboots in a loop.
 
 Both verify the download's SHA256 before flashing and raise on a mismatch.
+
+Do not use `mix atomvm.esp32.install` on the badge: it erases the whole flash,
+NVS included, and installs upstream AtomVM rather than this fork.
 
 ## Assets
 

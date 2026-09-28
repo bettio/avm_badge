@@ -16,6 +16,12 @@ Setup, flashing and the ESP-IDF workflow are in `README.md`.
 - The check's `warning: missing atomvm dependency` is expected: the standard
   library is the fork's `boot.avm`, and the `atomvm` package would pack a
   second copy into the 656K slot
+- `mix atomvm.esp32.flash`, `mix badge.base` and `mix badge.assets --flash`
+  run esptool through Pythonx (`ExAtomVM.EsptoolHelper`), which fetches
+  Python and esptool on first use; nothing needs to be on PATH
+- **Never run `mix atomvm.esp32.install` on the badge.** It erases the whole
+  flash, NVS included, and installs upstream AtomVM. `mix badge.base` is the
+  badge's equivalent
 - `iex -S mix` — the firmware on fake hardware, panel at
   http://localhost:3240. `mix sim.check` renders every page once, headless
 - Two mix targets: `:host` is the simulator (`sim/lib` plus

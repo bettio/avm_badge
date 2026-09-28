@@ -44,8 +44,8 @@ Setup, flashing and the ESP-IDF workflow are in `README.md`.
   656K each. NervesHub writes whichever is not running and flips
   `atomvm`/`boot_path` in NVS
 - `assets.avm` at `0x278000` holds the rickroll frames, the `.uf` fonts and
-  the splash logo, mounted by `Badge.start/0`. `tools/flashassets.sh` packs
-  and writes it; it is **not** updated over the air
+  the splash logo, mounted by `Badge.start/0`. `mix badge.assets --flash`
+  packs and writes it; it is **not** updated over the air
 - `python3 tools/check_partitions.py <partitions.csv> [label=path ...]` fails
   if an artifact outgrows its partition
 - A missing assets partition is survivable: the badge boots, prints

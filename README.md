@@ -42,7 +42,7 @@ Plug the badge in over USB, then:
     cd avm_badge/firmware
     mix deps.get
     mix badge.base             # once per board: bootloader, VM, boot.avm
-    tools/flashassets.sh       # once per board: fonts, icons, splash logo
+    mix badge.assets --flash   # once per board: fonts, icons, splash logo
     mix atomvm.esp32.flash     # the firmware itself, every time
 
 The serial port is auto-detected, so do not pass `--port`. It appears as
@@ -59,7 +59,7 @@ watch it boot (`stty -F` on Linux):
 You should see the AtomVM banner, then `Badge: starting`, then the home grid
 on the panel. The six shape keys open the pages; the arrows page the grid.
 
-`tools/flashassets.sh` writes the assets partition, which holds the extra
+`mix badge.assets --flash` writes the assets partition, which holds the extra
 fonts, the splash logo and the rickroll frames. It is **not** updated over the
 air, so run it again whenever anything under `assets/` changes — see
 [Assets](#assets). A badge without it still boots and prints
@@ -158,7 +158,7 @@ Sources live in `assets/src/`. To regenerate:
     python3 tools/icons.py              # assets/icons/*.rgba
     python3 tools/gif.py                # assets/rickroll/*.rgba
     mix badge.assets                    # packs assets.avm
-    tools/flashassets.sh                # writes it to the assets partition
+    mix badge.assets --flash            # packs it and writes the partition
 
 `assets.avm` is not updated over the air.
 

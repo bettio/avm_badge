@@ -177,11 +177,12 @@ environment in any shell that needs it:
 
 ### Provisioning NVS
 
-`tools/provision.py` borrows two things from ESP-IDF: its NVS parser, to read
-what the badge already holds, and its NVS image generator, to write the merged
-result back. The generator lives inside ESP-IDF's own virtualenv rather than
-on your `PATH`, which is why sourcing `export.sh` (or just setting `IDF_PATH`)
-is enough — the tool finds the right interpreter itself.
+`tools/provision.py` borrows three things from ESP-IDF: its NVS parser, to
+read what the badge already holds, its NVS image generator, to write the
+merged result back, and `esptool`, if none is on your `PATH`. The generator
+and `esptool` live inside ESP-IDF's own virtualenv rather than on your `PATH`,
+which is why sourcing `export.sh` (or just setting `IDF_PATH`) is enough — the
+tool finds the right interpreter itself.
 
     python3 tools/provision.py --wifi-ssid MyNetwork      # prompts for the passphrase
     python3 tools/provision.py --dry-run                  # read and show the merge

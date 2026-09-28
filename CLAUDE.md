@@ -231,9 +231,9 @@ Setup, flashing and the ESP-IDF workflow are in `README.md`.
   the merge, `--forget-wifi` drops the saved network alone
 - It needs ESP-IDF for the NVS parser and image generator. The generator lives
   inside IDF's own virtualenv, so the tool finds that interpreter itself
-- Every tool takes esptool under either name: `esptool`, then `esptool.py`,
-  then `python3 -m esptool`. A Homebrew esptool has its own private Python, so
-  the module form is the last resort
+- `provision.py` still shells out to esptool: `esptool`, then `esptool.py`,
+  then `python3 -m esptool`, then IDF's own virtualenv. A Homebrew esptool has
+  its own private Python, so the module forms come last
 - ESP-IDF's own `nvs.net80211`, `phy` and `misc` namespaces are not preserved;
   they rebuild on the next boot, costing one slower wifi connect
 

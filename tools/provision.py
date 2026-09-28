@@ -67,18 +67,16 @@ def tool(executables, module):
 
     esptool ships as `esptool` and, until it is dropped, `esptool.py`; either
     may be a standalone binary with its own Python, so the importable module
-    is the last resort rather than the first.
+    is the last resort rather than the first. ESP-IDF's virtualenv carries one.
     """
     for name in executables:
         found = shutil.which(name)
         if found:
             return [found]
 
-    try:
-        if importlib.util.find_spec(module):
-            return [sys.executable, "-m", module]
-    except ModuleNotFoundError:
-        pass
+    for python in [sys.executable, *idf_pythons()]:
+        if importable(python, module):
+            return [python, "-m", module]
 
     sys.exit(f"cannot run {executables[0]}: install it, or the {module} module")
 

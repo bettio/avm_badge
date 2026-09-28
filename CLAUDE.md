@@ -11,8 +11,11 @@ Setup, flashing and the ESP-IDF workflow are in `README.md`.
   `:regenerates_assets` because they rewrite tracked files
 - `mix atomvm.check` — the real compatibility gate, and it runs during flash.
   Host tests passing proves nothing
-- `mix atomvm.esp32.flash` — builds, checks, flashes. The port auto-detects;
-  never pass `--port`
+- `mix atomvm.esp32.flash` — builds, checks, flashes the `main.avm` partition
+  it reads off the board. The port auto-detects; never pass `--port`
+- The check's `warning: missing atomvm dependency` is expected: the standard
+  library is the fork's `boot.avm`, and the `atomvm` package would pack a
+  second copy into the 656K slot
 - `iex -S mix` — the firmware on fake hardware, panel at
   http://localhost:3240. `mix sim.check` renders every page once, headless
 - Two mix targets: `:host` is the simulator (`sim/lib` plus

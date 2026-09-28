@@ -28,9 +28,7 @@ defmodule Badge.MixProject do
       ],
       atomvm: [
         start: Badge,
-        flash_offset: 0x2B8000,
-        chip: "esp32s3",
-        port: "auto"
+        chip: "esp32s3"
       ]
     ]
   end
@@ -54,7 +52,7 @@ defmodule Badge.MixProject do
     [
       {:exatomvm,
        github: "atomvm/ExAtomVM",
-       ref: "ff7daf7e83a4e86fbf078730b6c49045a99de9f8",
+       ref: "7802373f107d0b83e36206bb06bb1ed1bb43ac90",
        runtime: false},
       # The Erlang side of the port driver built into the VM. A rebar3
       # project, so mix is told which manager to use.

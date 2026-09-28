@@ -14,12 +14,14 @@ defmodule Mix.Tasks.Badge.Base do
 
   use Mix.Task
 
+  alias ExAtomVM.EsptoolHelper
+
   @repo "protolux-electronics/AtomVM"
   @cache ".base"
-  @vm {"atomvm-esp32s3-badge.bin", "0x10000"}
-  @boot {"boot.avm", "0x1f0000"}
-  @bootloader {"bootloader.bin", "0x0"}
-  @table {"partition-table.bin", "0x8000"}
+  @vm {"atomvm-esp32s3-badge.bin", 0x10000}
+  @boot {"boot.avm", 0x1F0000}
+  @bootloader {"bootloader.bin", 0x0}
+  @table {"partition-table.bin", 0x8000}
   @sums "SHA256SUMS"
 
   @impl Mix.Task
@@ -35,7 +37,7 @@ defmodule Mix.Tasks.Badge.Base do
   end
 
   @doc "What a flash writes: everything unless only the VM was asked for."
-  @spec parts(keyword) :: [{binary, binary}]
+  @spec parts(keyword) :: [{binary, non_neg_integer}]
   def parts(options) do
     if Keyword.get(options, :vm_only, false) do
       [@vm, @boot]
@@ -91,20 +93,16 @@ defmodule Mix.Tasks.Badge.Base do
   end
 
   defp flash(dir, parts) do
-    args = Enum.flat_map(parts, fn {file, offset} -> [offset, Path.join(dir, file)] end)
-    {bin, prefix} = esptool()
-
-    cmd!(bin, prefix ++ ["--chip", "esp32s3", "--baud", "921600", "write_flash"] ++ args)
+    write_flash(Enum.map(parts, fn {file, offset} -> {offset, Path.join(dir, file)} end))
   end
 
-  # esptool ships under both names while the .py suffix is being retired.
-  defp esptool do
-    cond do
-      path = System.find_executable("esptool") -> {path, []}
-      path = System.find_executable("esptool.py") -> {path, []}
-      path = System.find_executable("python3") -> {path, ["-m", "esptool"]}
-      true -> Mix.raise("no esptool on PATH")
-    end
+  @doc "Writes `{offset, path}` pairs to the badge with ExAtomVM's embedded esptool."
+  @spec write_flash([{non_neg_integer, binary}]) :: :ok
+  def write_flash(parts) do
+    :ok = EsptoolHelper.setup()
+    port = EsptoolHelper.select_device()["port"]
+    unless EsptoolHelper.write_flash_parts(port, "921600", parts), do: Mix.raise("esptool failed")
+    :ok
   end
 
   defp cmd!(bin, args) do

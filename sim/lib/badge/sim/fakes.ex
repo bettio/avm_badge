@@ -37,7 +37,10 @@ defmodule Badge.Sim.Fakes do
       ),
       fake(
         Badge.Keyboard,
-        fn {:holding?, label}, d -> :lists.member(label, Map.get(d, :held, [])) end,
+        fn
+          {:holding?, label}, d -> :lists.member(label, Map.get(d, :held, []))
+          :held, d -> Map.get(d, :held, [])
+        end,
         fn {:held, labels}, d -> Map.put(d, :held, labels) end
       ),
       fake(Badge.Update.Link, fn :status, _ ->

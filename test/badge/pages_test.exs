@@ -77,8 +77,10 @@ defmodule Badge.PagesTest do
                Badge.Page.Agent,
                Badge.Page.Cluster,
                Badge.Page.ConnectFour,
-               nil
+               Badge.Page.Raycaster
              ]
+
+      assert Pages.for_key(:diamond, 1) == Badge.Page.Raycaster
     end
 
     test "the text page is kept but unreachable, an example rather than a page" do
@@ -88,8 +90,7 @@ defmodule Badge.PagesTest do
       refute :lists.member(Badge.Page.Text, Pages.all())
     end
 
-    test "an empty slot is nil, not a crash" do
-      assert Pages.for_key(:diamond, 1) == nil
+    test "a slot past the last screen is nil, not a crash" do
       assert Pages.for_key(:square, 99) == nil
     end
   end

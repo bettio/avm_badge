@@ -140,6 +140,15 @@ defmodule Badge.Keyboard do
   end
 
   @doc """
+  Every key held down right now, by layout label.
+
+  One call for the lot, for a page that reads several keys at once: asking
+  `holding?/1` per key costs a scan gap each.
+  """
+  @spec held() :: [charlist]
+  def held, do: GenServer.call(__MODULE__, :held)
+
+  @doc """
   Stops the CPU on the next scan until a key is pressed, unless one is held.
   The badge restarts when it wakes, so the key comes back as a fresh boot.
   """
@@ -150,6 +159,8 @@ defmodule Badge.Keyboard do
   def handle_call({:holding?, label}, _from, state) do
     {:reply, :lists.member(label, state.held), state}
   end
+
+  def handle_call(:held, _from, state), do: {:reply, state.held, state}
 
   @impl true
   def handle_cast(:light_sleep, state), do: {:noreply, %{state | sleep: true}}

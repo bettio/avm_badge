@@ -67,6 +67,12 @@ defmodule Badge.UI do
   # so a key inside the gap waits for the next tick instead.
   @key_gap 35
 
+  # AtomGL answers a frame when it is queued, not when it is drawn, and keeps up
+  # to 32. A frame is not sent while the last is still going out, so a page that
+  # draws every tick can never leave the panel showing what happened a second
+  # ago. A lost reply stops holding frames back after this long.
+  @inflight_max 1_000
+
   @font_dogica File.read!("assets/fonts/dogica.uf")
   @font_pixel_operator File.read!("assets/fonts/pixel_operator.uf")
   # Loaded only while a page asks for it: 18 kB is more than this badge can
@@ -139,13 +145,15 @@ defmodule Badge.UI do
       idle: 0,
       asleep: false,
       napping: false,
-      drawn_at: now()
+      drawn_at: now(),
+      inflight: nil,
+      pending: nil
     }
 
     Skin.activate(Skin.load())
 
     # Renders once immediately so the home grid is up before the first tick.
-    render(state)
+    push(state, frame(state))
 
     start_ticker()
 
@@ -211,6 +219,21 @@ defmodule Badge.UI do
 
   # The IR link delivers here because this process owns the mailbox; only the
   # page on screen is offered the frame.
+  def handle_info(:drawn, %{pending: nil} = state) do
+    state = %{state | inflight: nil}
+
+    case not state.asleep and state.dirty and state.countdown <= 0 do
+      true -> {:noreply, draw(state)}
+      false -> {:noreply, state}
+    end
+  end
+
+  def handle_info(:drawn, %{pending: items} = state) do
+    push(state, items)
+
+    {:noreply, %{state | pending: nil, inflight: now(), drawn_at: now()}}
+  end
+
   def handle_info({:ir, from, payload}, state) do
     case state.page.handle_ir(from, payload, state.page_state) do
       {:ok, page_state} ->
@@ -258,11 +281,58 @@ defmodule Badge.UI do
     end
   end
 
+  # While the last frame is going out the next is cast anyway and held, so the
+  # cast overlaps the panel's drawing, and `:drawn` sends it the moment the
+  # panel is free. A frame already held is not replaced: the page stays dirty
+  # and is cast again once that one has gone.
   defp draw(state) do
-    drawn = sync_fonts(state)
-    render(drawn)
+    case {waiting?(state.inflight, now()), state.pending} do
+      {false, _pending} -> paint(state)
+      {true, nil} -> hold(state)
+      {true, _pending} -> %{state | countdown: 0}
+    end
+  end
 
-    %{drawn | dirty: false, countdown: reload(drawn.page, drawn.page_state), drawn_at: now()}
+  defp paint(state) do
+    drawn = sync_fonts(state)
+    push(drawn, frame(drawn))
+
+    %{
+      drawn
+      | dirty: false,
+        countdown: reload(drawn.page, drawn.page_state),
+        drawn_at: now(),
+        inflight: now(),
+        pending: nil
+    }
+  end
+
+  defp hold(state) do
+    drawn = sync_fonts(state)
+
+    %{
+      drawn
+      | dirty: false,
+        countdown: reload(drawn.page, drawn.page_state),
+        pending: frame(drawn)
+    }
+  end
+
+  defp waiting?(nil, _now), do: false
+  defp waiting?(queued, now), do: now - queued < @inflight_max
+
+  # AtomGL answers font calls in queue order, on the task that draws, so this
+  # returns only once every frame before it is on the panel. It waits in its own
+  # process, so this one never blocks on the panel.
+  defp hold_for_panel(display) do
+    ui = self()
+
+    spawn(fn ->
+      Display.deregister_font(display, :sync)
+      send(ui, :drawn)
+    end)
+
+    :ok
   end
 
   # A key is drawn now rather than at the page's refresh; one inside the gap
@@ -450,13 +520,16 @@ defmodule Badge.UI do
     state.page.leave(state.page_state)
     :io.format(~c"UI: page ~p~n", [page])
 
-    %{state | page: page, page_state: page.init(), dirty: true, countdown: 0}
+    %{state | page: page, page_state: page.init(), dirty: true, countdown: 0, pending: nil}
   end
 
-  defp render(%{display: display, page: page, page_state: page_state, status: status}) do
-    items = page.render(page_state) ++ Theme.chrome(page.title(), status)
+  defp frame(%{page: page, page_state: page_state, status: status}) do
+    page.render(page_state) ++ Theme.chrome(page.title(), status)
+  end
 
+  defp push(%{display: display}, items) do
     :ok = Display.update(display, items)
+    hold_for_panel(display)
   end
 
   # Waits in a linked process, so this GenServer never sleeps in a callback and a dead ticker crashes loudly.

@@ -8,17 +8,21 @@ defmodule Badge.Accel do
   little-endian pair, +-2g full scale, so 1g = 16384 counts and
   `mg = raw * 1000 / 16384`, simplified here to `raw * 125 / 2048`.
 
-  The sensor is mounted with its Z axis inverted relative to the panel, so a
-  badge lying flat with the panel upwards reads gravity on -Z rather than
-  +Z. `flat/0` is that reference; measure tilt as a difference from it.
+  Samples are in the panel's frame, not the sensor's: x toward the panel's
+  right edge, y toward its top edge, z out of the screen. A badge lying face
+  up reads `{0, 0, 1000}` and one hanging upright reads `{0, 1000, 0}`.
   """
 
   @type mg :: {integer, integer, integer}
 
-  @doc "Decodes the 6 bytes read from OUT_X_L..OUT_Z_H (0x28..0x2D) into milli-g."
+  @doc """
+  Decodes the 6 bytes read from OUT_X_L..OUT_Z_H (0x28..0x2D) into milli-g,
+  in the panel's frame.
+  """
   @spec decode(binary) :: mg
   def decode(<<x::little-signed-16, y::little-signed-16, z::little-signed-16>>) do
-    {to_mg(x), to_mg(y), to_mg(z)}
+    # The sensor faces the back of the board, so its x and z oppose the panel's.
+    {-to_mg(x), to_mg(y), -to_mg(z)}
   end
 
   defp to_mg(raw), do: div(raw * 125, 2048)
@@ -37,19 +41,16 @@ defmodule Badge.Accel do
   defp ema(previous, new), do: previous + div(new - previous, 4)
 
   @doc """
-  The roll and pitch `orientation/1` reports when the panel is horizontal.
+  Roll and pitch in whole degrees from a milli-g sample.
 
-  Gravity lands on -Z rather than +Z, so a level badge reads half a turn of
-  roll instead of none.
+  Both are zero with the badge face up and level. Roll is positive with the
+  right edge lowered, pitch positive with the top edge raised, so a badge
+  hanging upright reads a pitch of 90.
   """
-  @spec flat() :: {integer, integer}
-  def flat, do: orientation({0, 0, -1000})
-
-  @doc "Roll and pitch in whole degrees from a milli-g sample."
   @spec orientation(mg) :: {integer, integer}
   def orientation({x, y, z}) do
-    roll = round(:math.atan2(y, z) * 180 / :math.pi())
-    pitch = round(:math.atan2(-x, :math.sqrt(y * y + z * z)) * 180 / :math.pi())
+    roll = round(:math.atan2(-x, :math.sqrt(y * y + z * z)) * 180 / :math.pi())
+    pitch = round(:math.atan2(y, z) * 180 / :math.pi())
     {roll, pitch}
   end
 end

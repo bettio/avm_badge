@@ -6,10 +6,6 @@ defmodule Badge.Page.TiltTest do
   alias Badge.Page.Tilt
   alias Badge.Theme
 
-  # Both boards, measured lying flat on a desk. They straddle the 180 seam.
-  @board_a {178, 2}
-  @board_b {-179, -3}
-
   defp marker(state) do
     [{:image, x, y, _bg, _img} | _rest] = Tilt.render(state)
 
@@ -18,12 +14,14 @@ defmodule Badge.Page.TiltTest do
 
   defp levelled, do: at(0, 0)
 
-  # The raw sensor reading for a badge tilted this far from flat.
-  defp at(roll, pitch), do: Tilt.update(Tilt.init(), {seam(elem(Accel.flat(), 0) + roll), pitch})
+  defp at(roll, pitch), do: Tilt.update(Tilt.init(), {roll, pitch})
 
-  defp seam(degrees) when degrees > 180, do: degrees - 360
-  defp seam(degrees) when degrees < -180, do: degrees + 360
-  defp seam(degrees), do: degrees
+  # The page for raw sensor registers, in counts at 16384 per g.
+  defp sensed(x, y, z) do
+    bytes = <<x::little-signed-16, y::little-signed-16, z::little-signed-16>>
+
+    Tilt.update(Tilt.init(), Accel.orientation(Accel.decode(bytes)))
+  end
 
   defp marker_size, do: Icons.size(:circle)
 
@@ -38,40 +36,28 @@ defmodule Badge.Page.TiltTest do
   end
 
   describe "levelling against gravity" do
-    test "a badge lying flat sits within a quantum of centre, with nothing pressed" do
+    test "a badge lying face up sits at the centre, with nothing pressed" do
+      assert sensed(0, 0, -16384) == levelled()
+    end
+
+    test "tipping the top edge away moves the marker up, not sideways" do
+      {x, y} = marker(sensed(0, -8192, -14189))
       {cx, cy} = marker(levelled())
 
-      for reading <- [@board_a, @board_b] do
-        {x, y} = marker(Tilt.update(Tilt.init(), reading))
+      assert x == cx
+      assert y < cy
+    end
 
-        assert abs(x - cx) <= 8
-        assert abs(y - cy) <= 8
-      end
+    test "lowering the right edge moves the marker right, not up or down" do
+      {x, y} = marker(sensed(8192, 0, -14189))
+      {cx, cy} = marker(levelled())
+
+      assert x > cx
+      assert y == cy
     end
 
     test "the very first reading is already measured, not swallowed as a zero" do
-      tilted = Tilt.update(Tilt.init(), {seam(elem(Accel.flat(), 0) + 30), 0})
-
-      refute marker(tilted) == marker(levelled())
-    end
-
-    test "the flat reference sits on the seam, so either side of it reads level" do
-      assert elem(@board_a, 0) > 0
-      assert elem(@board_b, 0) < 0
-
-      for reading <- [@board_a, @board_b] do
-        %{roll: roll} = Tilt.update(Tilt.init(), reading)
-
-        assert abs(roll) <= 4
-      end
-    end
-
-    test "crossing the seam is a small move, not a full swing" do
-      {left_x, _y} = marker(at(-10, 0))
-      {right_x, _y2} = marker(at(10, 0))
-
-      refute left_x == right_x
-      assert abs(right_x - left_x) < abs(elem(marker(at(45, 0)), 0) - elem(marker(at(-45, 0)), 0))
+      refute marker(at(30, 0)) == marker(levelled())
     end
 
     test "no key is claimed, so a container owns them all" do
@@ -90,19 +76,18 @@ defmodule Badge.Page.TiltTest do
       assert y == 120 - div(h, 2)
     end
 
-    test "roll moves the marker horizontally, inverted to match the panel" do
+    test "roll moves the marker horizontally, toward the lowered edge" do
       {positive, _y} = marker(at(45, 0))
       {centre, _y2} = marker(at(0, 0))
       {negative, _y3} = marker(at(-45, 0))
 
-      # Sensor roll increases toward the panel's left, so the mapping flips it.
-      assert positive < centre
-      assert centre < negative
+      assert negative < centre
+      assert centre < positive
     end
 
     test "the readout agrees with the direction the marker moved" do
-      [body] = for {:text, _x, _y, _f, _fg, _bg, body} <- Tilt.render(at(-30, 0)), do: body
-      {x, _y} = marker(at(-30, 0))
+      [body] = for {:text, _x, _y, _f, _fg, _bg, body} <- Tilt.render(at(30, 0)), do: body
+      {x, _y} = marker(at(30, 0))
 
       # Marker right of centre means a positive roll on screen.
       assert x > elem(marker(at(0, 0)), 0)
@@ -170,21 +155,12 @@ defmodule Badge.Page.TiltTest do
       assert {:image, _x, _y, _bg, {:rgba8888, _w, _h, _bin}} = first
     end
 
-    test "shows the angles relative to the zero" do
+    test "shows both angles" do
       texts = for {:text, _x, _y, _f, _fg, _bg, body} <- Tilt.render(at(-30, -20)), do: body
 
       assert length(texts) == 1
-      assert :binary.match(hd(texts), "30") != :nomatch
-      assert :binary.match(hd(texts), "-20") != :nomatch
-    end
-
-    test "reads near zero on a flat desk, however the sensor is mounted" do
-      for reading <- [@board_a, @board_b] do
-        %{roll: roll, pitch: pitch} = Tilt.update(Tilt.init(), reading)
-
-        assert abs(roll) <= 4
-        assert abs(pitch) <= 4
-      end
+      assert :binary.match(hd(texts), "roll -30") != :nomatch
+      assert :binary.match(hd(texts), "pitch -20") != :nomatch
     end
 
     test "a perfectly level reading reads exactly zero" do

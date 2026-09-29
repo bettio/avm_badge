@@ -38,13 +38,13 @@ defmodule Badge.Sensors do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  @doc "Reads the accelerometer now, in milli-g."
+  @doc "Reads the accelerometer now, in milli-g in the panel's frame (see `Badge.Accel`)."
   @spec acceleration() :: Accel.mg()
   def acceleration do
     GenServer.call(__MODULE__, :acceleration)
   end
 
-  @doc "Reads the accelerometer now and returns roll and pitch in whole degrees."
+  @doc "Reads the accelerometer now and returns roll and pitch as `Badge.Accel.orientation/1` does."
   @spec orientation() :: {integer, integer}
   def orientation do
     GenServer.call(__MODULE__, :orientation)

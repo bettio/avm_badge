@@ -4,9 +4,24 @@ defmodule Badge.AccelTest do
   alias Badge.Accel
 
   describe "decode/1" do
-    test "converts raw counts to milli-g" do
+    test "converts raw counts to milli-g in the panel's frame" do
       bytes = <<-1120::little-signed-16, 13936::little-signed-16, -9184::little-signed-16>>
-      assert Accel.decode(bytes) == {-68, 850, -560}
+      assert Accel.decode(bytes) == {68, 850, 560}
+    end
+
+    test "a badge lying face up reads gravity out of the screen" do
+      bytes = <<0::little-signed-16, 0::little-signed-16, -16384::little-signed-16>>
+      assert Accel.decode(bytes) == {0, 0, 1000}
+    end
+
+    test "the sensor's y runs toward the panel's top edge" do
+      bytes = <<0::little-signed-16, 16384::little-signed-16, 0::little-signed-16>>
+      assert Accel.decode(bytes) == {0, 1000, 0}
+    end
+
+    test "the sensor's x runs toward the panel's left edge" do
+      bytes = <<16384::little-signed-16, 0::little-signed-16, 0::little-signed-16>>
+      assert Accel.decode(bytes) == {-1000, 0, 0}
     end
 
     test "a stationary reading has unit magnitude" do
@@ -49,27 +64,23 @@ defmodule Badge.AccelTest do
     end
   end
 
-  describe "flat/0" do
-    test "is what orientation/1 reports with gravity on the panel normal" do
-      assert Accel.flat() == Accel.orientation({0, 0, -1000})
-    end
-
-    test "names the mounting flip rather than leaving it to a captured zero" do
-      assert Accel.flat() == {180, 0}
-    end
-  end
-
   describe "orientation/1" do
-    test "flat, z up, gives zero roll and pitch" do
+    test "face up and level gives zero roll and pitch" do
       assert Accel.orientation({0, 0, 1000}) == {0, 0}
     end
 
-    test "rolled 90 degrees onto its side" do
-      assert Accel.orientation({0, 1000, 0}) == {90, 0}
+    test "lowering the right edge rolls positive" do
+      assert Accel.orientation({-1000, 0, 0}) == {90, 0}
+      assert Accel.orientation({-500, 0, 866}) == {30, 0}
     end
 
-    test "pitched 90 degrees nose down" do
-      assert Accel.orientation({1000, 0, 0}) == {0, -90}
+    test "raising the top edge pitches positive" do
+      assert Accel.orientation({0, 1000, 0}) == {0, 90}
+      assert Accel.orientation({0, 500, 866}) == {0, 30}
+    end
+
+    test "tipping the top edge away pitches negative, with no roll" do
+      assert Accel.orientation({0, -500, 866}) == {0, -30}
     end
   end
 end

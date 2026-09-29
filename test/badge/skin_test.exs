@@ -5,6 +5,7 @@ defmodule Badge.SkinTest do
   alias Badge.Skin.Dark
   alias Badge.Skin.Macintosh
   alias Badge.Skin.Win95
+  alias Badge.Skin.WinXP
   alias Badge.Theme
 
   @status %{battery: :battery_100, wifi: :wifi, clock: "12:34"}
@@ -37,9 +38,10 @@ defmodule Badge.SkinTest do
     test "shift stops at both ends rather than wrapping" do
       assert Skin.shift(Dark, -1) == Dark
       assert Skin.shift(Dark, 1) == Win95
-      assert Skin.shift(Win95, 1) == Macintosh
+      assert Skin.shift(Win95, 1) == WinXP
+      assert Skin.shift(WinXP, 1) == Macintosh
       assert Skin.shift(Macintosh, 1) == Macintosh
-      assert Skin.shift(Macintosh, -1) == Win95
+      assert Skin.shift(Macintosh, -1) == WinXP
     end
   end
 
@@ -95,7 +97,7 @@ defmodule Badge.SkinTest do
     end
   end
 
-  for skin <- [Dark, Win95, Macintosh] do
+  for skin <- [Dark, Win95, WinXP, Macintosh] do
     describe "#{inspect(skin)}" do
       @skin skin
 

@@ -1,6 +1,11 @@
 defmodule Badge.Page.Text do
   @moduledoc """
-  Typing surface over `Badge.TextBuffer`.
+  A worked example of a text box, kept for reference rather than use.
+
+  It is not in `Badge.Pages`, so no shape key opens it and the badge never
+  runs it. Read it for how a page wires `Badge.TextBuffer` to the keyboard —
+  a full-screen editor in about a hundred lines — and add the module back to
+  that list if you want it on the grid.
 
   Geometry is the content area below the title bar: 39 columns by 12 rows.
   """

@@ -55,7 +55,7 @@ defmodule Badge.Sim.Check do
     leave_splash()
     key = key_for(page)
     Badge.UI.key_event({:nav, key})
-    %{page: ^page} = state = :sys.get_state(Badge.UI)
+    state = await_page(page, 50)
 
     with true <- state.dirty,
          sequence = Display.snapshot().sequence,
@@ -65,6 +65,21 @@ defmodule Badge.Sim.Check do
     else
       false -> Display.snapshot()
       {:error, :timeout} -> raise "timed out rendering #{inspect(page)}"
+    end
+  end
+
+  # The home grid opens a page from its own tick, so the key is not the arrival.
+  defp await_page(page, 0),
+    do: raise("#{inspect(page)} never opened, still on #{inspect(:sys.get_state(Badge.UI).page)}")
+
+  defp await_page(page, tries) do
+    case :sys.get_state(Badge.UI) do
+      %{page: ^page} = state ->
+        state
+
+      _other ->
+        Process.sleep(20)
+        await_page(page, tries - 1)
     end
   end
 

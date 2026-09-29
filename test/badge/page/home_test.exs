@@ -6,8 +6,6 @@ defmodule Badge.Page.HomeTest do
   alias Badge.Pages
   alias Badge.Theme
 
-  @keys [:square, :triangle, :cross, :circle, :clover, :diamond]
-
   defp assigned(screen),
     do: for({_key, module} <- Pages.screen(screen), module != nil, do: module)
 
@@ -156,16 +154,17 @@ defmodule Badge.Page.HomeTest do
   end
 
   describe "shape keys" do
-    test "on the first screen are left for the router" do
-      for key <- @keys do
-        assert Home.handle_key({:nav, key}, Home.init()) == :ignore
+    test "on the first screen choose that screen's page, like any other" do
+      for {key, module} <- Pages.screen(0), module != nil do
+        assert {:ok, state} = Home.handle_key({:nav, key}, Home.init())
+        assert Home.tick(state) == {:goto, module}
       end
     end
 
     test "on a later screen choose that screen's page and the next tick opens it" do
       chosen = press(on(1), {:nav, :triangle})
 
-      assert Home.tick(chosen) == {:goto, Badge.Page.Agent}
+      assert Home.tick(chosen) == {:goto, Pages.for_key(:triangle, 1)}
     end
 
     test "over an empty slot are swallowed rather than opening the first screen's page" do

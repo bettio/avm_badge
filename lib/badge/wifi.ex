@@ -199,7 +199,7 @@ defmodule Badge.Wifi do
   def handle_cast(:scan, state) do
     started = ensure_started(state)
 
-    case :network.wifi_scan() do
+    case :network.wifi_scan(results: 20) do
       :ok ->
         {:noreply, %{started | scanning: true}}
 

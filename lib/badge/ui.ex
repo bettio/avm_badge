@@ -3,18 +3,23 @@ defmodule Badge.UI do
   Owns the display backend and decides what is on it.
 
   Pages are modules, not processes: this process holds the current page's
-  state and calls `render/1`, `tick/1` and `handle_key/2` on it. Shape keys
-  and Esc are intercepted here and never reach a page, so no page has to
-  know that navigation exists.
+  state and calls `render/1`, `tick/1` and `handle_key/2` on it. Every key
+  reaches the page on screen first. A shape key it ignores goes nowhere: only
+  the home grid opens pages, by returning `{:goto, page}` from its `tick/1`.
+  Escape is the one key this process answers itself, and only when the page
+  ignores it too, so a page can spend it backing out a level of its own.
 
-  Rendering stays decoupled from input: key events only mutate page state
-  and mark it dirty, and a linked ticker asks for a redraw at a bounded
-  rate. The link is load-bearing — a silently dead ticker would freeze the
-  panel behind a healthy-looking supervision tree.
+  A key that changes the page is drawn at once, so the panel answers the
+  hand rather than the next tick. Everything else only marks the page dirty,
+  and a linked ticker asks for a redraw at a bounded rate. The link is
+  load-bearing — a silently dead ticker would freeze the panel behind a
+  healthy-looking supervision tree.
 
-  Each page sets its own frame rate through `refresh/0`. `tick/1` still
-  runs on every base tick regardless, so a page that smooths its readings
-  keeps averaging at full rate while repainting slowly.
+  Each page sets its own frame rate through `refresh/0`, which paces the
+  redraws its data asks for; keys skip it and are held only to the panel's
+  own write time. `tick/1` still runs on every base tick regardless, so a
+  page that smooths its readings keeps averaging at full rate while
+  repainting slowly.
 
   After the sleep timeout the panel and the LED chain go dark and no frame is
   drawn, though pages keep ticking so nothing resets behind the blank screen.
@@ -55,6 +60,11 @@ defmodule Badge.UI do
 
   # The clock in the title bar needs a second; battery and wifi change far more slowly.
   @status_ticks div(1_000, @base_interval)
+
+  # Shortest gap between frames drawn for a key, in milliseconds: about one
+  # full-panel write at 40 MHz. Closer frames would only queue up in AtomGL,
+  # so a key inside the gap waits for the next tick instead.
+  @key_gap 35
 
   @font_dogica File.read!("assets/fonts/dogica.uf")
   @font_pixel_operator File.read!("assets/fonts/pixel_operator.uf")
@@ -126,7 +136,8 @@ defmodule Badge.UI do
       missing: [],
       idle: 0,
       asleep: false,
-      napping: false
+      napping: false,
+      drawn_at: now()
     }
 
     Skin.activate(Skin.load())
@@ -148,7 +159,7 @@ defmodule Badge.UI do
   end
 
   def handle_cast({:key, _event}, %{asleep: true} = state) do
-    {:noreply, wake(state)}
+    {:noreply, prompt(wake(state))}
   end
 
   # The only wake source is a key, so the screen comes on without waiting for its event.
@@ -164,8 +175,8 @@ defmodule Badge.UI do
     {:noreply, %{state | napping: false, idle: 0}}
   end
 
-  # Offered to the page first, so a container can back out a level and the
-  # home grid can lend the shape keys to its second screen; ignored, it navigates.
+  # The page on screen owns the shape keys; only escape falls through here, and
+  # only when the page had no use for it.
   def handle_cast({:key, {:nav, key}}, state) do
     state = %{state | idle: 0}
 
@@ -173,10 +184,10 @@ defmodule Badge.UI do
       {:ok, page_state} ->
         dirty = state.dirty or page_state != state.page_state
 
-        {:noreply, %{state | page_state: page_state, dirty: dirty}}
+        {:noreply, prompt(opened(%{state | page_state: page_state, dirty: dirty}))}
 
       :ignore ->
-        {:noreply, navigate(key, state)}
+        {:noreply, prompt(escape(key, state))}
     end
   end
 
@@ -187,7 +198,7 @@ defmodule Badge.UI do
       {:ok, page_state} ->
         dirty = state.dirty or page_state != state.page_state
 
-        {:noreply, %{state | page_state: page_state, dirty: dirty}}
+        {:noreply, prompt(opened(%{state | page_state: page_state, dirty: dirty}))}
 
       :ignore ->
         {:noreply, state}
@@ -247,16 +258,46 @@ defmodule Badge.UI do
 
     # Nothing is visible while asleep, and a repaint is the costliest thing here.
     case not next.asleep and dirty and next.countdown <= 0 do
-      true ->
-        drawn = sync_fonts(next)
-        render(drawn)
-
-        %{drawn | dirty: false, countdown: reload(drawn.page, drawn.page_state)}
-
-      false ->
-        %{next | countdown: max(next.countdown - 1, 0)}
+      true -> draw(next)
+      false -> %{next | countdown: max(next.countdown - 1, 0)}
     end
   end
+
+  defp draw(state) do
+    drawn = sync_fonts(state)
+    render(drawn)
+
+    %{drawn | dirty: false, countdown: reload(drawn.page, drawn.page_state), drawn_at: now()}
+  end
+
+  # A key is drawn now rather than at the page's refresh; one inside the gap
+  # clears the countdown so the next tick draws it.
+  defp prompt(%{asleep: false, dirty: true} = state) do
+    case key_due?(state.drawn_at, now()) do
+      true -> draw(state)
+      false -> %{state | countdown: 0}
+    end
+  end
+
+  defp prompt(state), do: state
+
+  @doc false
+  # Whether a key's frame may go out now, given when the last one did.
+  @spec key_due?(integer, integer) :: boolean
+  def key_due?(drawn_at, now), do: now - drawn_at >= @key_gap
+
+  # The home grid opens a page from `tick/1`, a tick after the key. Its tick is
+  # pure, so it runs here to open the page with the key rather than after it.
+  defp opened(%{page: Home} = state) do
+    case Home.tick(state.page_state) do
+      {:goto, page} -> goto(state, page)
+      _page_state -> state
+    end
+  end
+
+  defp opened(state), do: state
+
+  defp now, do: :erlang.monotonic_time(:millisecond)
 
   defp first_page do
     case Splash.wanted?() do
@@ -404,20 +445,15 @@ defmodule Badge.UI do
     %{battery: :battery_0, wifi: Wifi.icon(:disabled), clock: Clock.format(0)}
   end
 
-  defp navigate(:home, state), do: goto(state, Home)
-
-  defp navigate(key, state) do
-    case Pages.for_key(key) do
-      nil -> state
-      module -> goto(state, module)
-    end
-  end
+  defp escape(:home, state), do: goto(state, Home)
+  defp escape(_key, state), do: state
 
   # Re-entering the current page would reset it, and key repeat fires a held key 8 times a second.
   defp goto(%{page: page} = state, page), do: state
 
   defp goto(state, page) do
     state.page.leave(state.page_state)
+    :io.format(~c"UI: page ~p~n", [page])
 
     %{state | page: page, page_state: page.init(), dirty: true, countdown: 0}
   end

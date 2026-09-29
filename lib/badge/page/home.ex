@@ -64,10 +64,7 @@ defmodule Badge.Page.Home do
   def handle_key({:nav, :home}, %{screen: 0}), do: :ignore
   def handle_key({:nav, :home}, state), do: {:ok, %{state | screen: 0}}
 
-  # The first screen is the router's to open; on a later one an empty slot
-  # swallows its key rather than opening the first screen's page.
-  def handle_key({:nav, _key}, %{screen: 0}), do: :ignore
-
+  # An empty slot swallows its key rather than opening another screen's page.
   def handle_key({:nav, key}, state) do
     {:ok, %{state | goto: Pages.for_key(key, state.screen)}}
   end

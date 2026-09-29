@@ -3,26 +3,28 @@ defmodule Badge.Pages do
   Every page, in the order the home grid shows them.
 
   The grid has six cells, one per shape key in button order, so the list is
-  read in screens of six. The first screen's pages open from anywhere on
-  their key; the later ones need the home grid turned to their screen first,
-  where the same six keys open them. A slot may be `nil`: its button does
-  nothing and its cell stays empty.
+  read in screens of six. A shape key opens the page in its cell on whichever
+  screen the grid is showing, and nowhere else. A slot may be `nil`: its
+  button does nothing and its cell stays empty.
+
+  A page module that is not in this list cannot be reached at all.
   """
 
   @keys [:square, :triangle, :cross, :circle, :clover, :diamond]
 
+  # The first screen is what an attendee reaches for; the rest follow.
+  # `Badge.Page.Text` is deliberately absent: it is an example, not a page.
   @pages [
     Badge.Page.Name,
     Badge.Page.Share,
     Badge.Page.Chat,
+    Badge.Page.Schedule,
+    Badge.Page.About,
+    Badge.Page.Settings,
     Badge.Page.Led,
     Badge.Page.Sensors,
-    Badge.Page.Settings,
-    Badge.Page.Text,
     Badge.Page.Agent,
-    Badge.Page.Cluster,
-    Badge.Page.About,
-    Badge.Page.Schedule
+    Badge.Page.Cluster
   ]
 
   @per_screen length(@keys)
@@ -39,9 +41,6 @@ defmodule Badge.Pages do
 
   @doc "One screen as `{key, module}` pairs, one per key, `nil` where the slot is empty."
   def screen(n), do: pair(@keys, drop(@pages, n * @per_screen), [])
-
-  @doc "The page a shape key opens from anywhere, or nil when the slot is unassigned."
-  def for_key(key), do: for_key(key, 0)
 
   @doc "The page a shape key opens while the home grid shows screen `n`."
   def for_key(key, n) do

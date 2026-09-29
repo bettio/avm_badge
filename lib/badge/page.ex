@@ -29,7 +29,14 @@ defmodule Badge.Page do
   @doc "Content display items, without chrome. Cursor first, background never."
   @callback render(state) :: [item]
 
-  @doc "Applies an event, or returns `:ignore` if the page has no use for it."
+  @doc """
+  Applies an event, or returns `:ignore` if the page has no use for it.
+
+  Every key reaches the page first, shape keys included, and a shape key the
+  page ignores goes nowhere — only the home grid opens pages. Escape arrives
+  as `{:nav, :home}`: answer it with `{:ok, state}` to spend it backing out a
+  level of your own, or ignore it and the router returns to the home grid.
+  """
   @callback handle_key(event, state) :: {:ok, state} | :ignore
 
   @doc """

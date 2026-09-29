@@ -13,8 +13,9 @@ microcontrollers, and is written in Elixir.
   [mise](https://mise.jdx.dev/lang/elixir.html) (`mise use erlang elixir`) or
   [asdf](https://asdf-vm.com/) (`asdf plugin add erlang && asdf plugin add
   elixir`) are both good choices
-- **[`gh`](https://cli.github.com/)**, authenticated — `mix badge.base`
-  downloads the VM release with it
+
+- **`curl`** — `mix badge.base` downloads the VM release with it, falling
+  back to an authenticated [`gh`](https://cli.github.com/)
 
 On macOS:
 
@@ -36,7 +37,7 @@ either — see [Advanced](#advanced) for the two things that do want it.
 Plug the badge in over USB, then:
 
     git clone https://github.com/protolux-electronics/avm_badge.git
-    cd avm_badge/firmware
+    cd avm_badge
     mix deps.get
     mix badge.base             # once per board: bootloader, VM, boot.avm
     mix badge.assets --flash   # once per board: fonts, icons, splash logo
@@ -63,6 +64,20 @@ air, so run it again whenever anything under `assets/` changes — see
 Reflashing leaves NVS alone, so the profile, the badges you have collected and
 the wifi credentials all survive.
 
+### Flashing a batch
+
+    tools/flashstation.exs
+
+takes over the terminal and flashes badges as they are plugged in, several
+at a time. Each board gets a column: it is written in one go (base image,
+assets, firmware), watched until the boot log says `Badge: starting`, then
+the column turns green with a big OK or red with the error. Unplug it and
+the column goes away. Missing tools are installed on the first run, through
+`mise` when it is on `PATH` and otherwise as above; a C compiler is needed
+once, for the `muontrap` wrapper that keeps every child process contained. With
+`BADGE_NH_KEY`/`BADGE_NH_SECRET` or `AVM_BADGE_SERVER_URL` set and ESP-IDF
+sourced, it provisions NVS as well.
+
 ### Without a board
 
     iex -S mix     # the firmware against fake hardware, panel at
@@ -85,16 +100,18 @@ Pure modules (`Badge.TextBuffer`, `Badge.Keymap`, `Badge.Sharing`, the wire
 formats) are tested on the host; anything that talks to GPIO, SPI or AtomGL is
 verified on hardware instead. `mix test` needs no board.
 
-## NervesHub (optional)
+## NervesHub
 
-Over-the-air updates need a NervesHub device key. Export both:
+Over-the-air updates work out of the box: the badge product's shared secret is
+compiled into `Badge.Update.Link`, so firmware you built yourself updates from
+the same hub as everyone else's. Open Settings → Update to see it.
+
+To point a badge at your own product instead, export your credentials and
+provision them into NVS, where they override the built-in pair:
 
     export BADGE_NH_KEY=...
     export BADGE_NH_SECRET=...
-
-then run `tools/provision.py`, which merges them into the badge's NVS and
-leaves every other key alone. The tools warn and continue when these are
-unset; a badge without them simply never updates.
+    python3 tools/provision.py
 
 ## Chat server
 

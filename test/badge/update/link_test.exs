@@ -16,6 +16,21 @@ defmodule Badge.Update.LinkTest do
     }
   end
 
+  describe "the built-in credentials" do
+    test "a build with no provisioning still knows a key and a secret" do
+      {key, secret} = Link.default_credentials()
+
+      assert byte_size(key) > 0
+      assert byte_size(secret) > 0
+    end
+
+    test "the key is a NervesHub product key" do
+      {key, _secret} = Link.default_credentials()
+
+      assert :binary.part(key, 0, 4) == "nhp_"
+    end
+  end
+
   describe "describing the running firmware" do
     test "reads the keys nh_flash actually answers with" do
       assert Link.firmware(metadata()) == %{

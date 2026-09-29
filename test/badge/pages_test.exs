@@ -42,13 +42,13 @@ defmodule Badge.PagesTest do
   describe "for_key/1" do
     test "resolves the first screen, which is what the router opens from anywhere" do
       for {key, module} <- Pages.screen(0) do
-        assert Pages.for_key(key) == module
+        assert Pages.for_key(key, 0) == module
       end
     end
 
     test "an unknown key is nil" do
-      assert Pages.for_key(:nonesuch) == nil
-      assert Pages.for_key(:home) == nil
+      assert Pages.for_key(:nonesuch, 0) == nil
+      assert Pages.for_key(:home, 0) == nil
     end
   end
 
@@ -59,14 +59,37 @@ defmodule Badge.PagesTest do
       end
     end
 
-    test "share sits next to the name on the first screen, and text leads the second" do
-      assert Pages.for_key(:square) == Badge.Page.Name
-      assert Pages.for_key(:triangle) == Badge.Page.Share
-      assert Pages.for_key(:square, 1) == Badge.Page.Text
-      assert Pages.for_key(:triangle, 1) == Badge.Page.Agent
+    test "the first screen is what an attendee reaches for" do
+      assert for({_key, module} <- Pages.screen(0), do: module) == [
+               Badge.Page.Name,
+               Badge.Page.Share,
+               Badge.Page.Chat,
+               Badge.Page.Schedule,
+               Badge.Page.About,
+               Badge.Page.Settings
+             ]
+    end
+
+    test "the rest sit on the second screen" do
+      assert for({_key, module} <- Pages.screen(1), do: module) == [
+               Badge.Page.Led,
+               Badge.Page.Sensors,
+               Badge.Page.Agent,
+               Badge.Page.Cluster,
+               nil,
+               nil
+             ]
+    end
+
+    test "the text page is kept but unreachable, an example rather than a page" do
+      Code.ensure_loaded!(Badge.Page.Text)
+
+      assert function_exported?(Badge.Page.Text, :render, 1)
+      refute :lists.member(Badge.Page.Text, Pages.all())
     end
 
     test "an empty slot is nil, not a crash" do
+      assert Pages.for_key(:clover, 1) == nil
       assert Pages.for_key(:diamond, 1) == nil
       assert Pages.for_key(:square, 99) == nil
     end

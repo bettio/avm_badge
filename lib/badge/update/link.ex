@@ -12,6 +12,10 @@ defmodule Badge.Update.Link do
 
   There is no automatic rollback below this: a badge that boots into broken
   firmware stays there until `revert/0` is reached.
+
+  The product's shared secret is compiled in, so a badge flashed from a fresh
+  clone updates itself with no provisioning. `tools/provision.py` overrides it
+  per badge by writing `nh_key` and `nh_secret` to NVS.
   """
 
   use GenServer
@@ -24,6 +28,11 @@ defmodule Badge.Update.Link do
   @compile {:no_warn_undefined, [:esp, :nh_flash, :nh_ota, NervesHubLink]}
 
   @host "devices.nervescloud.com"
+
+  # The badge's own product credentials, so a firmware anyone built updates
+  # itself without provisioning. NVS wins when a badge carries its own.
+  @key "nhp_M2JlScHNMgHq2mulr1yUlHUW0XYQDPkTSnjQ72ZZw80"
+  @secret "KfQ9UVgb6724Jqpo2oITeRXnwgQuXOBTwy0TVtLkFNE"
 
   @tick 1_000
 
@@ -362,10 +371,9 @@ defmodule Badge.Update.Link do
   defp start_agent(%{metadata: nil} = state), do: state
 
   defp start_agent(state) do
-    case credentials() do
-      nil -> %{state | state: :unprovisioned}
-      {key, secret} -> ready(Wifi.status(), key, secret, state)
-    end
+    {key, secret} = credentials()
+
+    ready(Wifi.status(), key, secret, state)
   end
 
   defp ready(wifi, key, secret, state) do
@@ -511,10 +519,14 @@ defmodule Badge.Update.Link do
     end
   end
 
+  @doc "The credentials compiled into this build, used when NVS holds none."
+  @spec default_credentials() :: {binary, binary}
+  def default_credentials, do: {@key, @secret}
+
   defp credentials do
     case {Nvs.get(:nh_key), Nvs.get(:nh_secret)} do
       {key, secret} when is_binary(key) and is_binary(secret) -> {key, secret}
-      _absent -> nil
+      _absent -> default_credentials()
     end
   end
 

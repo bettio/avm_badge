@@ -6,7 +6,7 @@ defmodule Badge.Sim.Check do
   alias Badge.Sim.Board
   alias Badge.Sim.Display
 
-  @doc "The splash, then every page a shape key opens from anywhere."
+  @doc "The splash, then every page on the home grid's first screen."
   def pages,
     do: [Splash] ++ for({_key, module} <- Badge.Pages.screen(0), module != nil, do: module)
 
@@ -52,7 +52,7 @@ defmodule Badge.Sim.Check do
   end
 
   defp navigate(page) do
-    leave_splash()
+    go_home()
     key = key_for(page)
     Badge.UI.key_event({:nav, key})
     state = await_page(page, 50)
@@ -83,16 +83,20 @@ defmodule Badge.Sim.Check do
     end
   end
 
-  # The splash takes any key as its cue to end, and hands over on the next tick.
-  defp leave_splash do
+  # Only the home grid opens pages. The splash takes any key as its cue to end, and hands over on the next tick.
+  defp go_home do
     case current_page() do
+      Home ->
+        :ok
+
       Splash ->
         Badge.UI.key_event({:nav, :home})
         send(Badge.UI, :render_tick)
         %{page: Home} = :sys.get_state(Badge.UI)
 
-      _other ->
-        :ok
+      _page ->
+        Badge.UI.key_event({:nav, :home})
+        %{page: Home} = :sys.get_state(Badge.UI)
     end
   end
 

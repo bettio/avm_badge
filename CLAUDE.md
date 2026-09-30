@@ -129,9 +129,9 @@ Setup, flashing and the ESP-IDF workflow are in `README.md`.
   (`width`, `height`, `bar_h`, `content_top`) is fixed and may be compile-time
 - The active skin lives in the rendering process's dictionary. Host tests see
   `Badge.Skin.Dark` unless they call `Badge.Skin.activate/1`
-- Monochrome icons are `.mask` files baked once per colour in
-  `Badge.Icons.tints/0`; a skin's `glyph/0` picks one, and a new glyph colour
-  must be added to that list or the icon draws nothing
+- Monochrome icons are `.mask` files that `Badge.Icons` packs into uFont
+  glyphs at compile time, one font per icon height, drawn as `{:text, …}` in
+  any colour; a skin's `glyph/0` picks it
 
 ## Pages
 

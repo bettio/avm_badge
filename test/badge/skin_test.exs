@@ -122,21 +122,11 @@ defmodule Badge.SkinTest do
       test "chrome carries the title, the clock and both icons" do
         items = @skin.chrome("Badge", @status)
         bodies = for {:text, _x, _y, _f, _fg, _bg, body} <- items, do: body
-        icons = for {:image, _x, _y, _bg, _image} <- items, do: :icon
+        icons = for {:text, _x, _y, :icons16, _fg, _bg, _glyph} <- items, do: :icon
 
         assert "Badge" in bodies
         assert "12:34" in bodies
         assert length(icons) == 2
-      end
-
-      test "chrome icons are drawn in a baked tint" do
-        for {:image, _x, _y, _bg, {:rgba8888, _w, _h, binary}} <- @skin.chrome("Badge", @status) do
-          assert is_binary(binary)
-        end
-      end
-
-      test "glyph colour is one the icons are baked in" do
-        assert @skin.glyph() in Badge.Icons.tints()
       end
 
       test "chrome stays inside the title bar" do

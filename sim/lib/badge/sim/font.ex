@@ -11,8 +11,10 @@ defmodule Badge.Sim.Font do
   def builtin_glyph(_char), do: builtin_glyph(??)
 
   @doc "Parses a .uf file into what drawing needs."
-  def load(path) do
-    data = File.read!(path)
+  def load(path), do: parse(File.read!(path))
+
+  @doc "Parses a uFont binary into what drawing needs."
+  def parse(data) do
     records = records(data, 12, %{})
     {header, _} = records["uFH0"]
 

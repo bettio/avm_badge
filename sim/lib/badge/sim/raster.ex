@@ -8,6 +8,7 @@ defmodule Badge.Sim.Raster do
   @fonts (for name <- [:dogica, :pixel_operator, :w95fa], into: %{} do
             {name, Font.load(Path.expand("../../../../assets/fonts/#{name}.uf", __DIR__))}
           end)
+          |> Map.merge(Map.new(Badge.Icons.fonts(), fn {name, data} -> {name, Font.parse(data)} end))
 
   @doc "An `{width, height, rgba}` bitmap of `text` in `font`, or nil for an unknown font."
   def text(:default16px, fg, bg, text) do

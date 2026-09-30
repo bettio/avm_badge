@@ -79,27 +79,12 @@ defmodule Badge.Page.ShareTest do
   end
 
   describe "the share screen" do
-    test "draws two badges facing each other, the right one turned, at twice size" do
-      images =
-        for {:scaled_cropped_image, x, y, w, h, _bg, 0, 0, 2, 2, [], {:rgba8888, iw, ih, data}} <-
-              Page.render(loaded()),
-            do: {x, y, w, h, iw, ih, data}
-
-      assert [{lx, y, w, h, iw, ih, left}, {rx, y, w, h, iw, ih, right}] = images
-      assert {w, h} == {iw * 2, ih * 2}
-      assert rx == lx + w
-      assert lx + rx + w == Theme.width()
-      assert right == Badge.Icons.half_turn(left)
-    end
-
     test "shows two badges meeting, whatever else it has to say" do
       for state <- [Page.init(), loaded(), loaded(%{})] do
-        art =
-          for {:scaled_cropped_image, _x, 90, _w, _h, _bg, _, _, _, _, _, _} = item <-
-                Page.render(state),
-              do: item
+        items = Page.render(state)
 
-        assert length(art) == 2
+        assert Badge.Icons.item(:badge_share, 74, 90) in items
+        assert Badge.Icons.item(:badge_share_turned, 160, 90) in items
       end
     end
 
@@ -392,7 +377,7 @@ defmodule Badge.Page.ShareTest do
     defp with_peers(n), do: collected(for i <- 1..n, do: peer(i, "Badge #{i}"))
 
     defp images(state),
-      do: for({:image, _x, _y, _bg, _img} = item <- Page.render(state), do: item)
+      do: for({:text, _x, _y, :icons16, _fg, _bg, _glyph} = item <- Page.render(state), do: item)
 
     test "a name with no icons beside it is shown whole" do
       assert "Bartholomew Cubbins the Third" in texts(

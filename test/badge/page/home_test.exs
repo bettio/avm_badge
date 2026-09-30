@@ -56,7 +56,7 @@ defmodule Badge.Page.HomeTest do
 
         for {key, module} <- Pages.screen(screen), module != nil do
           assert module.title() in texts(items)
-          assert Icons.binary(key, Theme.glyph()) in images(items)
+          assert Icons.binary(key) in images(items)
         end
       end
     end

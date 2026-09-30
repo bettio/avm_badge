@@ -157,7 +157,7 @@ defmodule Badge.Page.NameTest do
       assert "gusrs" in bodies
       assert "gus.example" in bodies
 
-      icons = for {:image, _x, _y, _bg, _img} <- Name.render(state), do: :icon
+      icons = for {:text, _x, _y, :icons16, _fg, _bg, _glyph} <- Name.render(state), do: :icon
 
       assert length(icons) == 2
     end
@@ -176,7 +176,7 @@ defmodule Badge.Page.NameTest do
 
     test "each link gets its own icon, not just the first" do
       state = showing(%{name: "Gus", links: "a.example b.example"})
-      icons = for {:image, _x, _y, _bg, _img} <- Name.render(state), do: :icon
+      icons = for {:text, _x, _y, :icons16, _fg, _bg, _glyph} <- Name.render(state), do: :icon
 
       assert length(icons) == 2
     end
@@ -389,7 +389,7 @@ defmodule Badge.Page.NameTest do
     end
 
     test "draws the link's own icon" do
-      assert Enum.any?(Name.render(qrcode()), &match?({:image, _x, _y, _bg, _img}, &1))
+      assert Enum.any?(Name.render(qrcode()), &match?({:text, _x, _y, :icons16, _fg, _bg, _glyph}, &1))
     end
 
     test "asks for a link when there is nothing to encode" do
@@ -433,7 +433,7 @@ defmodule Badge.Page.NameTest do
 
     test "the pending screen is a still frame: one line and the dots, nothing that could move" do
       items = Name.render(%{qrcode() | qr_result: :pending})
-      bodies = for {:text, _x, _y, _f, _c, _b, body} <- items, do: body
+      bodies = for {:text, _x, _y, f, _c, _b, body} <- items, f != :icons16, do: body
       rects = for {:rect, _x, _y, _w, _h, _c} <- items, do: :rect
 
       assert "Generating..." in bodies

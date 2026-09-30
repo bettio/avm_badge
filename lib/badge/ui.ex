@@ -41,6 +41,7 @@ defmodule Badge.UI do
   alias Badge.Clock
   alias Badge.Display
   alias Badge.Display.AtomGL
+  alias Badge.Icons
   alias Badge.Keyboard
   alias Badge.Page.Home
   alias Badge.Page.Splash
@@ -114,6 +115,7 @@ defmodule Badge.UI do
 
     :ok = Display.register_font(display, :dogica, @font_dogica)
     :ok = Display.register_font(display, :pixel_operator, @font_pixel_operator)
+    for {name, bytes} <- Icons.fonts(), do: :ok = Display.register_font(display, name, bytes)
 
     :io.format(~c"UI: AtomGL port open, ~p pages~n", [length(Pages.all())])
 

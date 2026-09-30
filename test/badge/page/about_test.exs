@@ -16,6 +16,7 @@ defmodule Badge.Page.AboutTest do
   defp body(index) do
     for {:text, x, y, font, _fg, _bg, text} <- About.render(state(index)),
         y > Theme.content_top(),
+        font != :icons16,
         do: {x, y, font, text}
   end
 

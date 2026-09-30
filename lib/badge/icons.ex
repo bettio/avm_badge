@@ -3,12 +3,10 @@ defmodule Badge.Icons do
   Converted artwork from `assets/icons`, baked into the module at compile time.
 
   Files are named `<name>@<width>x<height>` with one of two suffixes. `.rgba`
-  is straight-alpha `rgba8888` and is drawn as it is. `.mask` is one alpha
-  byte per pixel for monochrome art, and is baked here once per tint in
-  `tints/0`, so a skin's `glyph/0` picks the colour at draw time without any
-  work on the badge. A tint no skin uses costs flash for nothing, and one a
-  skin asks for without being listed here draws nothing, which
-  `Badge.SkinTest` catches.
+  is straight-alpha `rgba8888` and is drawn as an image. `.mask` is one alpha
+  byte per pixel for monochrome art; masks become glyphs in a uFont, one font
+  per icon height, and are drawn as text, so AtomGL tints them in any colour.
+  `Badge.UI` registers `fonts/0` at start.
 
   AtomGL blends every pixel that is not fully opaque against the background
   colour the item names, so an icon sits cleanly on any skin.
@@ -18,8 +16,6 @@ defmodule Badge.Icons do
   """
 
   alias Badge.Theme
-
-  @tints [0xFFFFFF, 0x000000]
 
   @dir Path.expand("../../assets/icons", __DIR__)
   @shapes [:square, :triangle, :cross, :circle, :clover, :diamond]
@@ -78,6 +74,27 @@ defmodule Badge.Icons do
             {name, {width, height, kind, data}}
           end)
 
+  # The Share art is one badge; the page draws it at twice size beside its half turn.
+  @icons (case Map.get(@icons, :badge_share) do
+            {width, height, :mask, mask} ->
+              doubled =
+                for y <- 0..(height - 1), _copy <- 1..2, into: <<>> do
+                  for <<alpha <- :binary.part(mask, y * width, width)>>,
+                    into: <<>>,
+                    do: <<alpha, alpha>>
+                end
+
+              turned = doubled |> :binary.bin_to_list() |> Enum.reverse() |> :binary.list_to_bin()
+
+              Map.merge(@icons, %{
+                badge_share: {2 * width, 2 * height, :mask, doubled},
+                badge_share_turned: {2 * width, 2 * height, :mask, turned}
+              })
+
+            nil ->
+              @icons
+          end)
+
   case @shapes -- Map.keys(@icons) do
     [] -> :ok
     missing -> raise "missing shape icons: #{Enum.join(missing, ", ")}"
@@ -85,50 +102,82 @@ defmodule Badge.Icons do
 
   @names Enum.sort(Map.keys(@icons))
 
+  # Each mask height gets its own font, since a uFont has one ascender; glyphs start at "!".
+  @glyphs (for {height, names} <-
+                 Enum.group_by(
+                   for({name, {_w, h, :mask, _data}} <- @icons, do: {name, h}),
+                   &elem(&1, 1),
+                   &elem(&1, 0)
+                 ),
+               {name, index} <- Enum.with_index(Enum.sort(names)),
+               into: %{} do
+             {name, {:"icons#{height}", <<0x21 + index>>}}
+           end)
+
+  # A uFont as ufontlib.c parses it: a glyph is its icon, 4-bit alpha, with the top-left at the item's origin.
+  @fonts (for {font, entries} <- Enum.group_by(@glyphs, fn {_name, {font, _text}} -> font end),
+              into: %{} do
+            names =
+              Enum.sort_by(entries, fn {_name, {_font, text}} -> text end)
+              |> Enum.map(&elem(&1, 0))
+
+            {_w, height, :mask, _data} = @icons[hd(names)]
+
+            {glyphs, bitmap} =
+              Enum.reduce(names, {<<>>, <<>>}, fn name, {glyphs, bitmap} ->
+                {width, ^height, :mask, mask} = @icons[name]
+                nibble = fn x, y -> div(:binary.at(mask, y * width + x) * 15 + 127, 255) end
+
+                packed =
+                  for y <- 0..(height - 1), x <- 0..(width - 1)//2, into: <<>> do
+                    high = if x + 1 < width, do: nibble.(x + 1, y), else: 0
+                    <<high::4, nibble.(x, y)::4>>
+                  end
+
+                glyph =
+                  <<width::little-16, height::little-16, width::little-16, 0::little-16,
+                    height::little-16, 0::little-32, byte_size(bitmap)::little-32>>
+
+                {glyphs <> glyph, bitmap <> packed}
+              end)
+
+            record = fn name, payload ->
+              body = name <> <<byte_size(payload)::big-32>> <> payload
+              body <> :binary.copy(<<0>>, rem(4 - rem(byte_size(body), 4), 4))
+            end
+
+            records =
+              record.(
+                "uFH0",
+                <<1::little-32, 0, height::little-16, height::little-16, 0::little-16>>
+              ) <>
+                record.("uFP0", glyphs) <>
+                record.(
+                  "uFI0",
+                  <<0x21::little-32, 0x20 + length(names)::little-32, 0::little-32>>
+                ) <>
+                record.("uFB0", bitmap)
+
+            {font, "FORM" <> <<byte_size(records) + 12::big-32>> <> "uFL0" <> records}
+          end)
+
   @doc "Every icon name, sorted."
   def names, do: @names
 
-  @doc "The colours monochrome icons are baked in."
-  def tints, do: @tints
+  @doc "The icon fonts as `{name, uFont binary}`, for `Badge.Display.register_font/3`."
+  def fonts, do: Map.to_list(@fonts)
 
   @doc "Whether an icon is monochrome, and so takes a tint."
-  def mono?(name)
+  def mono?(name), do: Map.has_key?(@glyphs, name)
 
-  for {name, {_width, _height, kind, _data}} <- @icons do
-    def mono?(unquote(name)), do: unquote(kind == :mask)
-  end
-
-  def mono?(_name), do: false
-
-  @doc """
-  The raw `rgba8888` binary for one icon.
-
-  A monochrome icon comes back in `tint`, which must be one of `tints/0`;
-  a colour icon ignores it. `nil` for an unknown icon or an unbaked tint.
-  """
-  def binary(name, tint)
+  @doc "The raw `rgba8888` binary for a colour icon, or nil for a monochrome or unknown one."
+  def binary(name)
 
   for {name, {_width, _height, :colour, data}} <- @icons do
-    def binary(unquote(name), _tint), do: unquote(data)
+    def binary(unquote(name)), do: unquote(data)
   end
 
-  for {name, {_width, _height, :mask, mask}} <- @icons, tint <- @tints do
-    r = div(tint, 0x10000)
-    g = div(rem(tint, 0x10000), 0x100)
-    b = rem(tint, 0x100)
-    data = for <<alpha <- mask>>, into: <<>>, do: <<r, g, b, alpha>>
-
-    def binary(unquote(name), unquote(tint)), do: unquote(data)
-  end
-
-  def binary(_name, _tint), do: nil
-
-  @doc "An `rgba8888` binary turned 180 degrees: the same pixels in reverse order."
-  def half_turn(rgba) do
-    pixels = for <<pixel::binary-size(4) <- rgba>>, do: pixel
-
-    :erlang.iolist_to_binary(:lists.reverse(pixels))
-  end
+  def binary(_name), do: nil
 
   @doc "The icon's `{width, height}` in pixels, or nil if there is no such icon."
   def size(name)
@@ -142,10 +191,17 @@ defmodule Badge.Icons do
   @doc "A display item drawing `name` at native size in the skin's glyph colour on its background."
   def item(name, x, y), do: item(name, x, y, Theme.glyph(), Theme.bg())
 
-  @doc "A display item drawing `name` at native size, tinted and blended onto `bg`."
-  def item(name, x, y, tint, bg) do
+  @doc "A display item drawing `name` at native size: a monochrome icon in `tint`, blended onto `bg`."
+  def item(name, x, y, tint, bg)
+
+  for {name, {font, text}} <- @glyphs do
+    def item(unquote(name), x, y, tint, bg),
+      do: {:text, x, y, unquote(font), tint, bg, unquote(text)}
+  end
+
+  def item(name, x, y, _tint, bg) do
     {width, height} = size(name)
 
-    {:image, x, y, bg, {:rgba8888, width, height, binary(name, tint)}}
+    {:image, x, y, bg, {:rgba8888, width, height, binary(name)}}
   end
 end

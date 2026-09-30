@@ -120,6 +120,15 @@ defmodule Badge.Page.ShareTest do
       assert colour_of(state, "added to your badges") == Theme.ok()
     end
 
+    test "a long name met on the share screen stays within the panel" do
+      state = %{loaded() | met: {:binary.copy("x", 64), :new}}
+
+      for {:text, x, _y, _font, _c, _b, body} <- Page.render(state) do
+        assert x >= 0
+        assert x + 8 * byte_size(body) <= Theme.width()
+      end
+    end
+
     test "a badge already collected says so, in its own colour" do
       state = %{loaded() | met: {"Pat", :known}}
 
@@ -140,6 +149,7 @@ defmodule Badge.Page.ShareTest do
     test "ticks at the beam cadence only while there is something to beam" do
       assert Page.beam_ms() == 200
       assert Page.refresh(loaded()) == Page.beam_ms()
+      assert Page.refresh(loaded(%{name: :binary.copy("x", 64)})) == 333
       assert Page.refresh(loaded(%{})) == 333
       assert Page.refresh(on(loaded(), 1)) == 333
     end
@@ -173,6 +183,38 @@ defmodule Badge.Page.ShareTest do
       three = Page.tick(two)
 
       assert {one.next, two.next, three.next} == {1, 0, 1}
+    end
+
+    test "a name that fits one IR frame keeps the original wire format" do
+      Process.register(self(), Badge.Ir.Link)
+      name = :binary.copy("x", 56)
+      state = loaded(%{name: name})
+
+      assert state.cycle == [{:name, name}]
+      Page.tick(state)
+      assert_receive {:"$gen_cast", {:transmit, payload}}
+      assert Wire.decode(payload) == {:ok, :name, [:name], name}
+    end
+
+    test "a 64-character name beams as two numbered frames" do
+      Process.register(self(), Badge.Ir.Link)
+      name = :binary.copy("x", 64)
+      state = loaded(%{name: name, company: "Protolux"}, [:name, :company])
+
+      assert length(state.cycle) == 3
+
+      after_parts =
+        Enum.reduce(0..1, state, fn index, current ->
+          next = Page.tick(current)
+          assert_receive {:"$gen_cast", {:transmit, payload}}
+          assert {:part, [:name, :company], ^index, 2, _chunk} = Wire.decode(payload)
+          next
+        end)
+
+      assert after_parts.next == 2
+      Page.tick(after_parts)
+      assert_receive {:"$gen_cast", {:transmit, payload}}
+      assert Wire.decode(payload) == {:ok, :company, [:name, :company], "Protolux"}
     end
 
     test "a field that is shared but empty is skipped" do
@@ -240,6 +282,51 @@ defmodule Badge.Page.ShareTest do
 
       assert Peers.find(next.peers, @other).profile == %{name: "Pat", company: "Protolux"}
       assert next.met == state.met
+    end
+
+    test "a long name is only collected after all fragments arrive" do
+      name = :binary.copy("x", 64)
+      parts = Wire.name_parts(name)
+
+      state =
+        Enum.reduce(parts, loaded(), fn {index, total, chunk}, state ->
+          {:ok, next} =
+            Page.handle_ir(@other, Wire.encode_part([:name], index, total, chunk), state)
+
+          if index < total - 1, do: assert(Peers.find(next.peers, @other) == nil)
+          next
+        end)
+
+      assert Peers.find(state.peers, @other).profile.name == name
+      assert state.met == {name, :new}
+      assert state.parts == %{}
+    end
+
+    test "a repeated start replaces an incomplete name" do
+      old = Wire.name_parts(:binary.copy("a", 64))
+      fresh = Wire.name_parts(:binary.copy("b", 64))
+      [{0, total, first} | _rest] = old
+      {:ok, state} = Page.handle_ir(@other, Wire.encode_part([:name], 0, total, first), loaded())
+
+      state =
+        Enum.reduce(fresh, state, fn {index, total, chunk}, acc ->
+          {:ok, next} =
+            Page.handle_ir(@other, Wire.encode_part([:name], index, total, chunk), acc)
+
+          next
+        end)
+
+      assert Peers.find(state.peers, @other).profile.name == :binary.copy("b", 64)
+    end
+
+    test "a final fragment without the first does not save a partial name" do
+      [{_first, _total, _chunk}, {index, total, chunk}] = Wire.name_parts(:binary.copy("x", 64))
+      state = loaded()
+
+      assert Page.handle_ir(@other, Wire.encode_part([:name], index, total, chunk), state) ==
+               :ignore
+
+      assert state.peers == []
     end
 
     test "a bare name from older firmware is a name" do

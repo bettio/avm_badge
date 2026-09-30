@@ -283,6 +283,19 @@ defmodule Badge.Page.NameTest do
       end
     end
 
+    test "a 64-character name only draws lines that fit the panel" do
+      state = showing(%{name: :binary.copy("x", 64)})
+
+      for page <- [state, screen(state, 1)] do
+        for {:text, x, y, font, _c, _b, body} <- Name.render(page) do
+          assert x >= 0
+          assert y >= 0
+          assert y + Badge.Font.line_height(font) <= Theme.height()
+          assert x + Badge.Font.width(font, body) <= Theme.width()
+        end
+      end
+    end
+
     test "the big name is centred, which needs the font measured not guessed" do
       state = screen(showing(%{name: "Gus Ross"}), 1)
 
@@ -675,11 +688,16 @@ defmodule Badge.Page.NameTest do
       assert Map.get(state.profile, :name) == "Gus"
     end
 
-    test "the field cannot grow past its capacity" do
-      long = :erlang.list_to_binary(:lists.duplicate(60, ?x))
+    test "the name accepts 64 characters and refuses the 65th" do
+      assert Profile.capacity(:name) == 64
+      long = :binary.copy("x", 65)
       state = editing() |> press({:edit, :newline}) |> type(long)
 
-      assert Badge.Field.value(state.field) |> byte_size() <= Profile.capacity(:name)
+      assert Badge.Field.value(state.field) == "Gus" <> :binary.copy("x", 61)
+      saved = press(state, {:edit, :newline})
+      assert saved.profile.name == "Gus" <> :binary.copy("x", 61)
+      reopened = saved |> press({:edit, :newline})
+      assert Badge.Field.value(reopened.field) == saved.profile.name
     end
 
     test "the entry screen names the field and says what the keys do" do

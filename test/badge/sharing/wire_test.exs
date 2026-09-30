@@ -34,8 +34,8 @@ defmodule Badge.Sharing.WireTest do
                {:ok, :company, [:name, :company, :links], "Goatmire International"}
     end
 
-    test "every field at capacity fits a frame" do
-      for key <- Wire.fields() do
+    test "every other field at capacity fits a frame" do
+      for key <- Wire.fields() -- [:name] do
         value = :binary.copy("x", Profile.capacity(key))
         payload = Wire.encode(key, Wire.fields(), value)
 
@@ -43,6 +43,27 @@ defmodule Badge.Sharing.WireTest do
         assert byte_size(payload) <= Ir.max_payload()
         assert Wire.decode(payload) == {:ok, key, Wire.fields(), value}
       end
+    end
+
+    test "a 64-byte name is split into numbered frames that fit the IR link" do
+      name = :binary.copy("n", Profile.capacity(:name))
+      parts = Wire.name_parts(name)
+
+      assert length(parts) == 2
+      assert :erlang.iolist_to_binary(for {_index, _total, chunk} <- parts, do: chunk) == name
+
+      for {index, total, chunk} <- parts do
+        payload = Wire.encode_part([:name, :company], index, total, chunk)
+
+        assert byte_size(payload) <= Ir.max_payload()
+        assert Wire.decode(payload) == {:part, [:name, :company], index, total, chunk}
+      end
+    end
+
+    test "invalid fragment indices and counts are refused" do
+      assert Wire.decode(<<9, 1, 5, 5, "x">>) == :error
+      assert Wire.decode(<<9, 1, 0, 1, "x">>) == :error
+      assert Wire.decode(<<9, 1, 0, 6, "x">>) == :error
     end
 
     test "the header is two bytes: the tag and the mask" do

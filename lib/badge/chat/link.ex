@@ -209,7 +209,7 @@ defmodule Badge.Chat.Link do
 
   defp opening(state) do
     chip = Identity.format(Identity.chip_id())
-    name = Profile.display_name(Profile.load())
+    name = Profile.chat_name(Profile.load())
     base = State.status(state.link).host
 
     :io.format(~c"Chat: connecting to ~s as ~s ~s~n", [base, chip, name])

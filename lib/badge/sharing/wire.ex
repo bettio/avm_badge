@@ -5,13 +5,14 @@ defmodule Badge.Sharing.Wire do
 
       <<tag, mask, value::binary>>
 
-  Tags sit below 0x20, so a payload whose first byte is printable is a bare
-  name from a badge on older firmware and decodes as one.
+  Tag 9 carries numbered fragments of a long name. Tags sit below 0x20,
+  so a printable first byte is a bare name from older firmware.
   """
 
   import Bitwise
 
   alias Badge.Ir
+  alias Badge.Profile
 
   # {key, tag}, in Profile.keys/0 order; the mask bit for a field is tag - 1.
   @tags [
@@ -27,6 +28,9 @@ defmodule Badge.Sharing.Wire do
 
   @header 2
   @max_value Ir.max_payload() - @header
+  @part_tag 9
+  @part_value Ir.max_payload() - 4
+  @max_parts div(Profile.capacity(:name) + @part_value - 1, @part_value)
   @legacy 0x20
 
   @doc "The fields a frame can carry, in tag order."
@@ -52,13 +56,43 @@ defmodule Badge.Sharing.Wire do
     end
   end
 
-  @doc """
-  What a payload carries: `{:ok, key, shared, value}`, or `:error` for a
-  payload no badge of ours sends. A printable first byte is a bare name.
-  """
-  @spec decode(binary) :: {:ok, atom, [atom], binary} | :error
+  @doc "Fragments of a name too long for one frame, as `{index, total, chunk}`."
+  def name_parts(value) do
+    total = div(byte_size(value) + @part_value - 1, @part_value)
+    name_parts(value, 0, total, [])
+  end
+
+  defp name_parts(_value, total, total, acc), do: :lists.reverse(acc)
+
+  defp name_parts(value, index, total, acc) do
+    start = index * @part_value
+    size = min(@part_value, byte_size(value) - start)
+    chunk = :binary.part(value, start, size)
+    name_parts(value, index + 1, total, [{index, total, chunk} | acc])
+  end
+
+  @doc "A numbered fragment of a long name."
+  def encode_part(shared, index, total, chunk)
+      when index >= 0 and index < total and total <= @max_parts and
+             byte_size(chunk) > 0 and byte_size(chunk) <= @part_value do
+    <<@part_tag, mask(shared), index, total>> <> chunk
+  end
+
+  def encode_part(_shared, _index, _total, _chunk), do: {:error, :too_long}
+
+  @doc "Decodes a field, a numbered name fragment, or a bare legacy name."
+  @spec decode(binary) ::
+          {:ok, atom, [atom], binary}
+          | {:part, [atom], non_neg_integer, pos_integer, binary}
+          | :error
   def decode(<<first, _rest::binary>> = payload) when first >= @legacy do
     {:ok, :name, [:name], payload}
+  end
+
+  def decode(<<@part_tag, mask, index, total, chunk::binary>>)
+      when total > 1 and total <= @max_parts and index < total and
+             byte_size(chunk) > 0 and byte_size(chunk) <= @part_value do
+    {:part, keys(mask), index, total, chunk}
   end
 
   def decode(<<tag, mask, value::binary>>) do

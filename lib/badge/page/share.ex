@@ -2,8 +2,8 @@ defmodule Badge.Page.Share do
   @moduledoc """
   Badge-to-badge sharing over the IR beam.
 
-  The share screen beams the owner's profile, one field per frame, while it
-  is showing, and records the badges it hears. The sharing screen picks
+  The share screen beams the owner's profile, one field per frame (or several
+  for a long name), while it is showing, and records the badges it hears. The sharing screen picks
   which fields go out; the collected screen lists who has been heard, and
   Enter on a row shows what they shared.
   """
@@ -32,6 +32,7 @@ defmodule Badge.Page.Share do
 
   # Between frames on the share screen.
   @beam_ms 200
+  @long_beam_ms 333
   @idle_ms 333
 
   # What meeting a badge looks like on the LED chain.
@@ -72,6 +73,7 @@ defmodule Badge.Page.Share do
 
   @name_columns div(Theme.width() - 2 * @margin, @name_w)
   @name_pitch 22
+  @visible_name_lines 5
   @name_y Theme.content_top() + 10
   @rule_h 2
   @rule_w 200
@@ -93,6 +95,9 @@ defmodule Badge.Page.Share do
   def icon, do: :triangle
 
   @impl true
+  def refresh(%{screen: @share_screen, mode: :show, cycle: [{:name_part, _, _, _} | _]}),
+    do: @long_beam_ms
+
   def refresh(%{screen: @share_screen, mode: :show, cycle: [_frame | _rest]}), do: @beam_ms
   def refresh(_state), do: @idle_ms
 
@@ -117,6 +122,7 @@ defmodule Badge.Page.Share do
       quiet: 0,
       met: nil,
       announced: nil,
+      parts: %{},
       cursor: 0,
       top: 0,
       opened: nil,
@@ -154,9 +160,10 @@ defmodule Badge.Page.Share do
 
   # Screen 0 is the whole protocol: on it we beam, off it we are silent.
   defp beam(%{screen: @share_screen, mode: :show, cycle: [_frame | _rest] = cycle} = state) do
-    {key, value} = :lists.nth(state.next + 1, cycle)
+    entry = :lists.nth(state.next + 1, cycle)
+    key = elem(entry, 0)
 
-    case Wire.encode(key, beamed(cycle), value) do
+    case frame(entry, beamed(cycle)) do
       {:error, reason} -> :io.format(~c"Share: cannot beam ~p: ~p~n", [key, reason])
       payload -> Ir.send(payload)
     end
@@ -166,8 +173,15 @@ defmodule Badge.Page.Share do
 
   defp beam(state), do: %{state | next: 0}
 
+  defp frame({:name_part, index, total, chunk}, shared),
+    do: Wire.encode_part(shared, index, total, chunk)
+
+  defp frame({key, value}, shared), do: Wire.encode(key, shared, value)
+
   # The mask names what goes out, not what is ticked.
-  defp beamed(cycle), do: for({key, _value} <- cycle, do: key)
+  defp beamed(cycle) do
+    for entry <- cycle, do: if(elem(entry, 0) == :name_part, do: :name, else: elem(entry, 0))
+  end
 
   defp settle(state), do: %{state | quiet: min(state.quiet + 1, @settle_ticks)}
 
@@ -226,6 +240,31 @@ defmodule Badge.Page.Share do
     :ignore
   end
 
+  defp hear({:part, shared, 0, total, chunk}, from, state) do
+    parts = if map_size(state.parts) >= 32, do: %{}, else: state.parts
+    entry = %{shared: shared, total: total, next: 1, value: chunk}
+
+    {:ok, %{state | parts: Map.put(parts, from, entry)}}
+  end
+
+  defp hear({:part, shared, index, total, chunk}, from, state) do
+    case Map.get(state.parts, from) do
+      %{shared: ^shared, total: ^total, next: ^index, value: value} ->
+        parts = Map.delete(state.parts, from)
+        combined = value <> chunk
+
+        if index + 1 == total do
+          hear({:ok, :name, shared, combined}, from, %{state | parts: parts})
+        else
+          entry = %{shared: shared, total: total, next: index + 1, value: combined}
+          {:ok, %{state | parts: Map.put(parts, from, entry)}}
+        end
+
+      _other ->
+        :ignore
+    end
+  end
+
   defp hear({:ok, key, shared, value}, from, state) do
     greeting = Peers.greeting(state.peers, from, key, value)
     peers = Peers.hear(state.peers, from, key, shared, value)
@@ -252,8 +291,19 @@ defmodule Badge.Page.Share do
   @doc "Rebuilds what the share screen beams, starting the cycle over."
   @spec recycle(map) :: map
   def recycle(state) do
-    %{state | cycle: Sharing.cycle(state.profile, state.shared), next: 0}
+    cycle = :lists.flatmap(&expand/1, Sharing.cycle(state.profile, state.shared))
+    %{state | cycle: cycle, next: 0}
   end
+
+  defp expand({:name, value} = entry) do
+    if byte_size(value) > Ir.max_payload() - 2 do
+      for {index, total, chunk} <- Wire.name_parts(value), do: {:name_part, index, total, chunk}
+    else
+      [entry]
+    end
+  end
+
+  defp expand(entry), do: [entry]
 
   @impl true
   def handle_key(event, %{mode: :detail} = state), do: detail_key(event, state)
@@ -485,7 +535,9 @@ defmodule Badge.Page.Share do
   defp drop([_head | rest], n), do: drop(rest, n - 1)
 
   defp detail_screen(profile) do
-    lines = Text.wrap(Profile.display_name(profile), @name_columns)
+    lines =
+      :lists.sublist(Text.wrap(Profile.display_name(profile), @name_columns), @visible_name_lines)
+
     rule_y = @name_y + length(lines) * @name_pitch + 6
 
     name_items(lines, @name_y, []) ++
@@ -532,7 +584,7 @@ defmodule Badge.Page.Share do
 
   defp met_lines({name, greeting}, count) do
     [
-      centred(name, @met_name_y, Theme.fg()),
+      centred(cut(name, div(Theme.width(), @char_w)), @met_name_y, Theme.fg()),
       centred(note(greeting), @met_note_y, colour(greeting)),
       collected_line(count)
     ]

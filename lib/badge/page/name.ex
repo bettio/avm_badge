@@ -2,8 +2,8 @@ defmodule Badge.Page.Name do
   @moduledoc """
   A name tag to leave on screen.
 
-  The name is set in the editor and kept in NVS. Long names wrap onto a
-  second line, and the rule sits under however many lines that takes.
+  The name is set in the editor and kept in NVS. Long names wrap on screen;
+  the rule sits under the visible lines.
   """
 
   use Badge.Page
@@ -28,6 +28,7 @@ defmodule Badge.Page.Name do
 
   @name_columns div(Theme.width() - 2 * @margin, @name_w)
   @name_pitch 22
+  @visible_name_lines 5
 
   @char_w 8
 
@@ -341,7 +342,9 @@ defmodule Badge.Page.Name do
     do: qr_screen(state) ++ Nav.dots(@screens, @qr_screen)
 
   def render(%{profile: profile} = state) do
-    lines = Text.wrap(Profile.display_name(profile), @name_columns)
+    lines =
+      :lists.sublist(Text.wrap(Profile.display_name(profile), @name_columns), @visible_name_lines)
+
     rule_y = @name_y + length(lines) * @name_pitch + 6
 
     name_items(lines, @name_y, []) ++
@@ -360,7 +363,8 @@ defmodule Badge.Page.Name do
       if Font.fits?(@big_font, name, @big_usable) do
         {@big_font, [name]}
       else
-        {@name_font, Text.wrap(name, @name_columns)}
+        max_lines = div(Theme.height() - Theme.content_top() - 16, Font.line_height(@name_font))
+        {@name_font, :lists.sublist(Text.wrap(name, @name_columns), max_lines)}
       end
 
     height = Font.line_height(font)

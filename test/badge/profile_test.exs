@@ -75,6 +75,24 @@ defmodule Badge.ProfileTest do
       assert Profile.display_name(Profile.blank()) == Profile.placeholder()
       assert Profile.display_name(with_values(%{name: "Gus"})) == "Gus"
     end
+
+    test "chat uses a shorter name to leave room for messages" do
+      name = :binary.copy("x", 64)
+
+      assert Profile.display_name(with_values(%{name: name})) == name
+      assert Profile.chat_name(with_values(%{name: name})) == :binary.copy("x", 16)
+      assert Badge.Page.Chat.Room.limit_for(Profile.chat_name(with_values(%{name: name}))) > 0
+      assert Profile.chat_name(with_values(%{name: "Gus"})) == "Gus"
+    end
+
+    test "chat names cut at the closest space within 16 characters" do
+      assert Profile.chat_name(with_values(%{name: "Gus Workman Protolux"})) == "Gus Workman"
+      assert Profile.short_chat_name("Gus Arthur Workman") == "Gus Arthur"
+      assert Profile.short_chat_name("1234567890123456 more") == "1234567890123456"
+      assert Profile.short_chat_name("Bartholomew Cubbins") == "Bartholomew"
+      assert Profile.short_chat_name("ABCDEFGHIJKLMNOPQ") == "ABCDEFGHIJKLMNOP"
+      assert Profile.short_chat_name("Gus Workman") == "Gus Workman"
+    end
   end
 
   describe "lines/1" do

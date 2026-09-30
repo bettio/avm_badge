@@ -12,7 +12,7 @@ defmodule Badge.Profile do
 
   # {key, label, capacity, icon shown beside it on the badge}
   @fields [
-    {:name, "Name", 18, nil},
+    {:name, "Name", 64, nil},
     {:company, "Company", 30, :company},
     {:email, "Email", 32, :email},
     {:github, "GitHub", 26, :github},
@@ -49,6 +49,7 @@ defmodule Badge.Profile do
 
   @required :name
   @placeholder "Nameless"
+  @chat_name_bytes 16
 
   # The one field that points at another rather than holding a value, and the
   # links it may point at, as {key, stored name}.
@@ -122,6 +123,28 @@ defmodule Badge.Profile do
     end
   end
 
+  @doc "The shortened name used by chat, leaving room for a message."
+  def chat_name(profile), do: short_chat_name(display_name(profile))
+
+  @doc "Cuts a chat name at the last space within 16 bytes, or at 16 for one long word."
+  def short_chat_name(name) when byte_size(name) <= @chat_name_bytes, do: name
+
+  def short_chat_name(name) do
+    case last_space(name, @chat_name_bytes) do
+      0 -> :binary.part(name, 0, @chat_name_bytes)
+      at -> :binary.part(name, 0, at)
+    end
+  end
+
+  defp last_space(_name, 0), do: 0
+
+  defp last_space(name, at) do
+    case :binary.at(name, at) do
+      ?\s -> at
+      _other -> last_space(name, at - 1)
+    end
+  end
+
   @doc """
   The lines the badge shows under the rule, as `{icon, text}`.
 
@@ -137,7 +160,14 @@ defmodule Badge.Profile do
 
   @doc "Reads the stored profile."
   @spec load() :: map
-  def load, do: for(key <- keys(), into: %{}, do: {key, Nvs.get(key) || ""})
+  def load, do: for(key <- keys(), into: %{}, do: {key, stored(key)})
+
+  defp stored(:name) do
+    value = Nvs.get(:name) || ""
+    :binary.part(value, 0, min(byte_size(value), capacity(:name)))
+  end
+
+  defp stored(key), do: Nvs.get(key) || ""
 
   @doc "Stores a profile."
   @spec save(map) :: :ok

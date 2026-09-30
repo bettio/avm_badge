@@ -100,7 +100,7 @@ defmodule Badge.Page.Chat.Room do
   defp named(%{loaded: true} = state), do: state
 
   defp named(state) do
-    %{state | loaded: true, limit: limit_for(Profile.display_name(Profile.load()))}
+    %{state | loaded: true, limit: limit_for(Profile.chat_name(Profile.load()))}
   end
 
   @impl true
@@ -218,7 +218,7 @@ defmodule Badge.Page.Chat.Room do
     Text.wrap(prefix(message) <> Map.get(message, :body, ""), @columns, @orphan)
   end
 
-  defp prefix(message), do: Map.get(message, :from, "") <> ": "
+  defp prefix(message), do: Profile.short_chat_name(Map.get(message, :from, "")) <> ": "
 
   defp lines([], _y, _at, acc), do: :lists.reverse(acc)
 

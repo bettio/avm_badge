@@ -201,6 +201,14 @@ defmodule Badge.Page.Chat.RoomTest do
       assert Enum.any?(shown, &(:binary.match(&1, "hello badges") != :nomatch))
     end
 
+    test "received names end at the nearest space within 16 characters" do
+      shown = texts(heard(Room.init(), [%{from: "Gus Workman Protolux", body: "hello"}]))
+
+      assert "Gus Workman: " in shown
+      refute Enum.any?(shown, &(:binary.match(&1, "Protolux") != :nomatch))
+      assert "hello" in shown
+    end
+
     test "the newest message is nearest the draft line" do
       state = heard(Room.init(), [%{from: "A", body: "newest"}, %{from: "B", body: "oldest"}])
 

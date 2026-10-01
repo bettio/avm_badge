@@ -42,13 +42,10 @@ defmodule Badge.Page.ConnectFour do
   @player_0 0xFBBF24
   @player_1 0xEF4444
 
-  # The same two-badges artwork the Share page leads with, since this screen
-  # is asking for exactly the same thing. Geometry only — the tint is read
-  # from the skin at draw time by Icons.item/3.
-  @art :badge_share
-  @art_w elem(Icons.size(@art), 0)
-  @art_h elem(Icons.size(@art), 1)
-  @art_x div(Theme.width() - @art_w, 2)
+  # The same two badges facing each other as the Share page: one, and its half turn beside it.
+  @art_w elem(Icons.size(:badge_share), 0)
+  @art_h elem(Icons.size(:badge_share), 1)
+  @art_x div(Theme.width() - 2 * @art_w, 2)
   @art_y 92
   @pairing_title_y Theme.content_top() + 30
   @pairing_caption_y @art_y + @art_h + 14
@@ -243,7 +240,8 @@ defmodule Badge.Page.ConnectFour do
   defp pairing_items do
     [
       centred("Connect Four", @pairing_title_y, Theme.fg()),
-      Icons.item(@art, @art_x, @art_y),
+      Icons.item(:badge_share, @art_x, @art_y),
+      Icons.item(:badge_share_turned, @art_x + @art_w, @art_y),
       centred("hold badges together", @pairing_caption_y, Theme.dim())
     ]
   end

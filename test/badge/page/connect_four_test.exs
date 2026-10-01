@@ -73,28 +73,24 @@ defmodule Badge.Page.ConnectFourTest do
   end
 
   describe "render/1 while pairing" do
-    test "leads with the badge-share artwork, centred and on screen" do
+    test "leads with the badge-share artwork: one badge and its half turn, centred as a pair" do
       items = ConnectFour.render(ConnectFour.init())
       {art_w, art_h} = Badge.Icons.size(:badge_share)
+      x = div(Badge.Theme.width() - 2 * art_w, 2)
 
-      assert [{:image, x, y, _bg, {:rgba8888, ^art_w, ^art_h, _data}}] =
-               for({:image, _x, _y, _bg, _payload} = item <- items, do: item)
-
-      assert x == div(Badge.Theme.width() - art_w, 2)
-      assert y + art_h <= Badge.Theme.height()
+      assert Badge.Icons.item(:badge_share, x, 92) in items
+      assert Badge.Icons.item(:badge_share_turned, x + art_w, 92) in items
+      assert 92 + art_h <= Badge.Theme.height()
     end
 
     test "the caption clears the artwork rather than drawing over it" do
       items = ConnectFour.render(ConnectFour.init())
       {_art_w, art_h} = Badge.Icons.size(:badge_share)
 
-      [{:image, _x, art_y, _bg, _payload}] =
-        for {:image, _x, _y, _bg, _payload} = item <- items, do: item
-
       captions = for {:text, _x, y, _font, _fg, _bg, text} <- items, do: {y, text}
 
       assert Enum.any?(captions, fn {y, text} ->
-               text == "hold badges together" and y >= art_y + art_h
+               text == "hold badges together" and y >= 92 + art_h
              end)
     end
   end

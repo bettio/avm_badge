@@ -102,64 +102,46 @@ defmodule Badge.Icons do
 
   @names Enum.sort(Map.keys(@icons))
 
-  # Each mask height gets its own font, since a uFont has one ascender; glyphs start at "!".
-  @glyphs (for {height, names} <-
-                 Enum.group_by(
-                   for({name, {_w, h, :mask, _data}} <- @icons, do: {name, h}),
-                   &elem(&1, 1),
-                   &elem(&1, 0)
-                 ),
-               {name, index} <- Enum.with_index(Enum.sort(names)),
-               into: %{} do
-             {name, {:"icons#{height}", <<0x21 + index>>}}
-           end)
+  # uFont writing, for the attributes below.
+  nibble = fn alpha, width, x, y -> if x < width, do: div(:binary.at(alpha, y * width + x) * 15 + 127, 255), else: 0 end
 
-  # A uFont as ufontlib.c parses it: a glyph is its icon, 4-bit alpha, with the top-left at the item's origin.
-  @fonts (for {font, entries} <- Enum.group_by(@glyphs, fn {_name, {font, _text}} -> font end),
-              into: %{} do
-            names =
-              Enum.sort_by(entries, fn {_name, {_font, text}} -> text end)
-              |> Enum.map(&elem(&1, 0))
+  # Two pixels per byte, 4-bit alpha, the left pixel in the low nibble.
+  pack = fn {width, height, alpha} ->
+    for y <- 0..(height - 1), x <- 0..(width - 1)//2, into: <<>>, do: <<nibble.(alpha, width, x + 1, y)::4, nibble.(alpha, width, x, y)::4>>
+  end
 
-            {_w, height, :mask, _data} = @icons[hd(names)]
+  # A glyph is the whole icon, its top-left at the item's origin.
+  glyph = fn {width, height, _alpha}, offset ->
+    <<width::little-16, height::little-16, width::little-16, 0::little-16, height::little-16, 0::little-32, offset::little-32>>
+  end
 
-            {glyphs, bitmap} =
-              Enum.reduce(names, {<<>>, <<>>}, fn name, {glyphs, bitmap} ->
-                {width, ^height, :mask, mask} = @icons[name]
-                nibble = fn x, y -> div(:binary.at(mask, y * width + x) * 15 + 127, 255) end
+  add_glyph = fn mask, {glyphs, bitmap} -> {glyphs <> glyph.(mask, byte_size(bitmap)), bitmap <> pack.(mask)} end
 
-                packed =
-                  for y <- 0..(height - 1), x <- 0..(width - 1)//2, into: <<>> do
-                    high = if x + 1 < width, do: nibble.(x + 1, y), else: 0
-                    <<high::4, nibble.(x, y)::4>>
-                  end
+  record = fn name, payload ->
+    body = name <> <<byte_size(payload)::big-32>> <> payload
+    body <> :binary.copy(<<0>>, rem(4 - rem(byte_size(body), 4), 4))
+  end
 
-                glyph =
-                  <<width::little-16, height::little-16, width::little-16, 0::little-16,
-                    height::little-16, 0::little-32, byte_size(bitmap)::little-32>>
+  # The IFF layout ufontlib.c parses, with glyphs from "!" on.
+  ufont = fn height, masks ->
+    {glyphs, bitmap} = Enum.reduce(masks, {<<>>, <<>>}, add_glyph)
+    header = <<1::little-32, 0, height::little-16, height::little-16, 0::little-16>>
+    intervals = <<?!::little-32, ?! + length(masks) - 1::little-32, 0::little-32>>
+    records = record.("uFH0", header) <> record.("uFP0", glyphs) <> record.("uFI0", intervals) <> record.("uFB0", bitmap)
 
-                {glyphs <> glyph, bitmap <> packed}
-              end)
+    "FORM" <> <<byte_size(records) + 12::big-32>> <> "uFL0" <> records
+  end
 
-            record = fn name, payload ->
-              body = name <> <<byte_size(payload)::big-32>> <> payload
-              body <> :binary.copy(<<0>>, rem(4 - rem(byte_size(body), 4), 4))
-            end
+  @masks for {name, {width, height, :mask, alpha}} <- @icons, into: %{}, do: {name, {width, height, alpha}}
 
-            records =
-              record.(
-                "uFH0",
-                <<1::little-32, 0, height::little-16, height::little-16, 0::little-16>>
-              ) <>
-                record.("uFP0", glyphs) <>
-                record.(
-                  "uFI0",
-                  <<0x21::little-32, 0x20 + length(names)::little-32, 0::little-32>>
-                ) <>
-                record.("uFB0", bitmap)
+  # One font per mask height, since a uFont has one ascender, as `{font, height, names}`.
+  @by_font @masks
+           |> Enum.group_by(fn {_name, {_width, height, _alpha}} -> height end, fn {name, _mask} -> name end)
+           |> Enum.map(fn {height, names} -> {:"icons#{height}", height, Enum.sort(names)} end)
 
-            {font, "FORM" <> <<byte_size(records) + 12::big-32>> <> "uFL0" <> records}
-          end)
+  @glyphs for {font, _height, names} <- @by_font, {name, index} <- Enum.with_index(names), into: %{}, do: {name, {font, <<?! + index>>}}
+
+  @fonts for {font, height, names} <- @by_font, into: %{}, do: {font, ufont.(height, Enum.map(names, &@masks[&1]))}
 
   @doc "Every icon name, sorted."
   def names, do: @names
